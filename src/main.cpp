@@ -1,4 +1,4 @@
-#include <Windows.h>
+#include "stdafx.h"
 
 
 int __stdcall wWinMain(HINSTANCE instance, HINSTANCE,
