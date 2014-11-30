@@ -2,7 +2,7 @@
 
 enum class HardFailures {
   none,
-  config_missing
+  bad_config
 };
 
 void HardfailMsgBox(HardFailures id, const wchar_t* info) {
@@ -16,16 +16,30 @@ plx::File OpenConfigFile() {
   return plx::File::Create(path, fparams, plx::FileSecurity());
 }
 
+struct Settings {
+  std::string user_name;
+  int window_width = 1000;
+  int window_height = 1000;
+};
+
+Settings LoadSettings() {
+  auto config = plx::JsonFromFile(OpenConfigFile());
+  if (config.type() != plx::JsonType::OBJECT)
+    throw plx::IOException(__LINE__, L"<unexpected json>");
+
+  return Settings();
+}
+
 
 int __stdcall wWinMain(HINSTANCE instance, HINSTANCE,
                        wchar_t* cmdline, int cmd_show) {
 
   try {
-    auto config = plx::JsonFromFile(OpenConfigFile());
 
+    auto settings = LoadSettings();
 
   } catch (plx::IOException& ex) {
-    HardfailMsgBox(HardFailures::config_missing, ex.Name());
+    HardfailMsgBox(HardFailures::bad_config, ex.Name());
     return 1;
   }
 
