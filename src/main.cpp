@@ -7,6 +7,7 @@ enum class HardFailures {
 };
 
 void HardfailMsgBox(HardFailures id, const wchar_t* info) {
+  // $$ implement.
   __debugbreak();
 }
 
@@ -27,7 +28,7 @@ Settings LoadSettings() {
   auto config = plx::JsonFromFile(OpenConfigFile());
   if (config.type() != plx::JsonType::OBJECT)
     throw plx::IOException(__LINE__, L"<unexpected json>");
-
+  // $$ read & set something here.
   return Settings();
 }
 
@@ -89,6 +90,7 @@ public:
   }
 
   LRESULT dpi_changed_handler(LPARAM lparam) {
+    // $$ test this.
     plx::RectL r(plx::SizeL(
           static_cast<long>(dpi_.to_physical_x(width_)),
           static_cast<long>(dpi_.to_physical_x(height_))));
