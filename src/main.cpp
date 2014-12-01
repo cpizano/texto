@@ -3,7 +3,8 @@
 
 enum class HardFailures {
   none,
-  bad_config
+  bad_config,
+  com_error
 };
 
 void HardfailMsgBox(HardFailures id, const wchar_t* info) {
@@ -184,12 +185,9 @@ public:
 
 int __stdcall wWinMain(HINSTANCE instance, HINSTANCE,
                        wchar_t* cmdline, int cmd_show) {
-
   try {
-
     auto settings = LoadSettings();
     DCoWindow window(settings.window_width, settings.window_height);
-
 
     auto accel_table =
         ::LoadAcceleratorsW( instance, MAKEINTRESOURCE(IDR_ACCEL_USA));
@@ -206,7 +204,8 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE,
   } catch (plx::IOException& ex) {
     HardfailMsgBox(HardFailures::bad_config, ex.Name());
     return 1;
+  } catch (plx::ComException&) {
+    HardfailMsgBox(HardFailures::com_error, L"COM");
+    return 2;
   }
-
-  return 0;
 }
