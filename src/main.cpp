@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "resource.h"
 
 enum class HardFailures {
   none,
@@ -113,6 +114,19 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE,
 
     auto settings = LoadSettings();
     DCoWindow window(settings.window_width, settings.window_height);
+
+
+    auto accel_table =
+        ::LoadAcceleratorsW( instance, MAKEINTRESOURCE(IDR_ACCEL_USA));
+    MSG msg = {0};
+    while (::GetMessage(&msg, NULL, 0, 0)) {
+      if (!::TranslateAccelerator(msg.hwnd, accel_table, &msg)) {
+        ::TranslateMessage(&msg);
+        ::DispatchMessage(&msg);
+      }
+    }
+
+    return (int) msg.wParam;
 
   } catch (plx::IOException& ex) {
     HardfailMsgBox(HardFailures::bad_config, ex.Name());
