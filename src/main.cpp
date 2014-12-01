@@ -32,6 +32,39 @@ Settings LoadSettings() {
   return Settings();
 }
 
+const D2D1_SIZE_F zero_offset = {0};
+
+class ScopedDraw {
+  bool drawing_;
+  plx::ComPtr<IDCompositionSurface> ics_;
+  const plx::DPI& dpi_;
+
+public:
+  ScopedDraw(plx::ComPtr<IDCompositionSurface> ics,
+          const plx::DPI& dpi) 
+    : drawing_(false),
+      ics_(ics),
+      dpi_(dpi) {
+  }
+
+  ~ScopedDraw() {
+    end();
+  }
+
+  plx::ComPtr<ID2D1DeviceContext> begin(const D2D1_COLOR_F& clear_color,
+                                        const D2D1_SIZE_F& offset) {
+    auto dc = plx::CreateDCoDeviceCtx(ics_, dpi_, offset);
+    dc->Clear(clear_color);
+    drawing_ = true;
+    return dc;
+  }
+
+  void end() {
+    if (drawing_)
+      ics_->EndDraw();
+  }
+};
+
 class DCoWindow : public plx::Window <DCoWindow> {
   // width and height are in logical pixels.
   const int width_;
@@ -80,7 +113,11 @@ public:
     hr = root_visual_->SetContent(root_surface_.Get());
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
-    // $$ Clear(color) window here. That should be enough for it to be visible.
+    // Draw gray translucent emptyness.
+    {
+      ScopedDraw sd(root_surface_, dpi_);
+      auto dc = sd.begin(D2D1::ColorF(0.3f, 0.3f, 0.3f, 0.7f), zero_offset);
+    }
     dco_device_->Commit();
   }
 

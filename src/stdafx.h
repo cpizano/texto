@@ -96,48 +96,6 @@ plx::ComPtr<IDCompositionDesktopDevice> CreateDCoDevice2(
 
 
 ///////////////////////////////////////////////////////////////////////////////
-// plx::CreateDCoSurface : Makes a DirectComposition compatible surface.
-//
-
-plx::ComPtr<IDCompositionSurface> CreateDCoSurface(
-    plx::ComPtr<IDCompositionDesktopDevice> device, unsigned int w, unsigned int h) ;
-
-
-///////////////////////////////////////////////////////////////////////////////
-// plx::CreateDCoVisual : Makes a DirectComposition Visual.
-//
-
-plx::ComPtr<IDCompositionVisual2> CreateDCoVisual(plx::ComPtr<IDCompositionDesktopDevice> device) ;
-
-
-///////////////////////////////////////////////////////////////////////////////
-// plx::CreateDCoWindowTarget : Makes a DirectComposition target for a window.
-//
-
-plx::ComPtr<IDCompositionTarget> CreateDCoWindowTarget(
-    plx::ComPtr<IDCompositionDesktopDevice> device, HWND window) ;
-
-
-
-///////////////////////////////////////////////////////////////////////////////
-// plx::CreateD2D1FactoryST : Direct2D fatory.
-// plx::CreateDeviceD2D1 : Direct2D device.
-//
-
-plx::ComPtr<ID2D1Factory2> CreateD2D1FactoryST(D2D1_DEBUG_LEVEL debug_level) ;
-
-plx::ComPtr<ID2D1Device> CreateDeviceD2D1(plx::ComPtr<ID3D11Device> device3D,
-                                          plx::ComPtr<ID2D1Factory2> factoryD2D1) ;
-
-
-///////////////////////////////////////////////////////////////////////////////
-// plx::CreateDeviceD3D11 : Direct3D device fatory.
-//
-
-plx::ComPtr<ID3D11Device> CreateDeviceD3D11(int extra_flags) ;
-
-
-///////////////////////////////////////////////////////////////////////////////
 // plx::DPI
 //
 //  96 DPI = 1.00 scaling
@@ -206,6 +164,57 @@ public:
   }
 
 };
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateDCoSurface : Makes a DirectComposition compatible surface.
+//
+
+plx::ComPtr<IDCompositionSurface> CreateDCoSurface(
+    plx::ComPtr<IDCompositionDesktopDevice> device, unsigned int w, unsigned int h) ;
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateDCoVisual : Makes a DirectComposition Visual.
+//
+
+plx::ComPtr<IDCompositionVisual2> CreateDCoVisual(plx::ComPtr<IDCompositionDesktopDevice> device) ;
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateDCoWindowTarget : Makes a DirectComposition target for a window.
+//
+
+plx::ComPtr<IDCompositionTarget> CreateDCoWindowTarget(
+    plx::ComPtr<IDCompositionDesktopDevice> device, HWND window) ;
+
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateD2D1FactoryST : Direct2D fatory.
+// plx::CreateDeviceD2D1 : Direct2D device.
+//
+
+plx::ComPtr<ID2D1Factory2> CreateD2D1FactoryST(D2D1_DEBUG_LEVEL debug_level) ;
+
+plx::ComPtr<ID2D1Device> CreateDeviceD2D1(plx::ComPtr<ID3D11Device> device3D,
+                                          plx::ComPtr<ID2D1Factory2> factoryD2D1) ;
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateDeviceD3D11 : Direct3D device fatory.
+//
+
+plx::ComPtr<ID3D11Device> CreateDeviceD3D11(int extra_flags) ;
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateDCoDeviceCtx : Makes a DirectComposition DC for drawing.
+//
+
+plx::ComPtr<ID2D1DeviceContext> CreateDCoDeviceCtx(
+    plx::ComPtr<IDCompositionSurface> surface,
+    const plx::DPI& dpi, const D2D1_SIZE_F& extra_offset) ;
 
 
 ///////////////////////////////////////////////////////////////////////////////
