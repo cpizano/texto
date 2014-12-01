@@ -11,6 +11,10 @@
 
 #include <shellscalingapi.h>
 #include <Shlobj.h>
+#include <d2d1_2.h>
+#include <d3d11_2.h>
+#include <dcomp.h>
+#include <wrl.h>
 #include <string.h>
 #include <array>
 #include <initializer_list>
@@ -75,6 +79,62 @@ public:
   }
 
 };
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::ComPtr : smart COM pointer.
+//
+template <typename T> using ComPtr = Microsoft::WRL::ComPtr <T>;
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateDCoDevice2 : DirectComposition Desktop Device.
+//
+
+plx::ComPtr<IDCompositionDesktopDevice> CreateDCoDevice2(
+    plx::ComPtr<ID2D1Device> device2D) ;
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateDCoSurface : Makes a DirectComposition compatible surface.
+//
+
+plx::ComPtr<IDCompositionSurface> CreateDCoSurface(
+    plx::ComPtr<IDCompositionDesktopDevice> device, unsigned int w, unsigned int h) ;
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateDCoVisual : Makes a DirectComposition Visual.
+//
+
+plx::ComPtr<IDCompositionVisual2> CreateDCoVisual(plx::ComPtr<IDCompositionDesktopDevice> device) ;
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateDCoWindowTarget : Makes a DirectComposition target for a window.
+//
+
+plx::ComPtr<IDCompositionTarget> CreateDCoWindowTarget(
+    plx::ComPtr<IDCompositionDesktopDevice> device, HWND window) ;
+
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateD2D1FactoryST : Direct2D fatory.
+// plx::CreateDeviceD2D1 : Direct2D device.
+//
+
+plx::ComPtr<ID2D1Factory2> CreateD2D1FactoryST(D2D1_DEBUG_LEVEL debug_level) ;
+
+plx::ComPtr<ID2D1Device> CreateDeviceD2D1(plx::ComPtr<ID3D11Device> device3D,
+                                          plx::ComPtr<ID2D1Factory2> factoryD2D1) ;
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateDeviceD3D11 : Direct3D device fatory.
+//
+
+plx::ComPtr<ID3D11Device> CreateDeviceD3D11(int extra_flags) ;
 
 
 ///////////////////////////////////////////////////////////////////////////////

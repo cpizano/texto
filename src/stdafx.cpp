@@ -6,7 +6,89 @@
 
 
 #pragma comment(lib, "shcore.lib")
+#pragma comment(lib, "d2d1.lib")
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "dcomp.lib")
 namespace plx {
+plx::ComPtr<IDCompositionDesktopDevice> CreateDCoDevice2(
+    plx::ComPtr<ID2D1Device> device2D) {
+  plx::ComPtr<IDCompositionDesktopDevice> device;
+  auto hr = DCompositionCreateDevice2(device2D.Get(),
+                                      __uuidof(device),
+                                      reinterpret_cast<void **>(device.GetAddressOf()));
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+  return device;
+}
+plx::ComPtr<IDCompositionSurface> CreateDCoSurface(
+    plx::ComPtr<IDCompositionDesktopDevice> device, unsigned int w, unsigned int h) {
+  plx::ComPtr<IDCompositionSurface> surface;
+  auto hr = device->CreateSurface(w, h,
+                                  DXGI_FORMAT_B8G8R8A8_UNORM,
+                                  DXGI_ALPHA_MODE_PREMULTIPLIED,
+                                  surface.GetAddressOf());
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+  return surface;
+}
+plx::ComPtr<IDCompositionVisual2> CreateDCoVisual(plx::ComPtr<IDCompositionDesktopDevice> device) {
+  plx::ComPtr<IDCompositionVisual2> visual;
+  auto hr = device->CreateVisual(visual.GetAddressOf());
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+  return visual;
+}
+plx::ComPtr<IDCompositionTarget> CreateDCoWindowTarget(
+    plx::ComPtr<IDCompositionDesktopDevice> device, HWND window) {
+  plx::ComPtr<IDCompositionTarget> target;
+  auto hr = device->CreateTargetForHwnd(window, TRUE, target.GetAddressOf());
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+  return target;
+}
+plx::ComPtr<ID2D1Factory2> CreateD2D1FactoryST(D2D1_DEBUG_LEVEL debug_level) {
+  D2D1_FACTORY_OPTIONS options = {};
+  options.debugLevel = debug_level;
+
+  plx::ComPtr<ID2D1Factory2> factory;
+  auto hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
+                              options,
+                              factory.GetAddressOf());
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+  return factory;
+}
+plx::ComPtr<ID2D1Device> CreateDeviceD2D1(plx::ComPtr<ID3D11Device> device3D,
+                                          plx::ComPtr<ID2D1Factory2> factoryD2D1) {
+  plx::ComPtr<IDXGIDevice3> dxgi_dev;
+  device3D.As(&dxgi_dev);
+  plx::ComPtr<ID2D1Device> device2D;
+
+  auto hr = factoryD2D1->CreateDevice(dxgi_dev.Get(),
+                                      device2D.GetAddressOf());
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+  return device2D;
+}
+plx::ComPtr<ID3D11Device> CreateDeviceD3D11(int extra_flags) {
+  auto flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT |
+               D3D11_CREATE_DEVICE_SINGLETHREADED;
+  flags |= extra_flags;
+
+  plx::ComPtr<ID3D11Device> device;
+  auto hr = D3D11CreateDevice(nullptr,
+                              D3D_DRIVER_TYPE_HARDWARE,
+                              nullptr,
+                              flags,
+                              nullptr, 0,
+                              D3D11_SDK_VERSION,
+                              device.GetAddressOf(),
+                              nullptr,
+                              nullptr);
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+  return device;
+}
 ItRange<uint8_t*> RangeFromBytes(void* start, size_t count) {
   auto s = reinterpret_cast<uint8_t*>(start);
   return ItRange<uint8_t*>(s, s + count);

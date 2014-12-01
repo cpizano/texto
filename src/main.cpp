@@ -33,8 +33,17 @@ Settings LoadSettings() {
 }
 
 class DCoWindow : public plx::Window <DCoWindow> {
+  // width and height are in logical pixels.
   const int width_;
   const int height_;
+
+  plx::ComPtr<ID3D11Device> d3d_device_;
+  plx::ComPtr<ID2D1Factory2> d2d_factory_;
+  plx::ComPtr<ID2D1Device> d2d_device_;
+  plx::ComPtr<IDCompositionDesktopDevice> dco_device_;
+  plx::ComPtr<IDCompositionTarget> dco_target_;
+  plx::ComPtr<IDCompositionVisual2> root_visual_;
+  plx::ComPtr<IDCompositionSurface> root_surface_;
 
 public:
   DCoWindow(int width, int height) : width_(width), height_(height) {
@@ -46,6 +55,33 @@ public:
                   width_, height_,
                   nullptr,
                   nullptr);
+    // create the 3 devices and 1 factory.
+#if defined (_DEBUG)
+    d3d_device_ = plx::CreateDeviceD3D11(D3D11_CREATE_DEVICE_DEBUG);
+    d2d_factory_ = plx::CreateD2D1FactoryST(D2D1_DEBUG_LEVEL_INFORMATION);
+#else
+    d3d_device_ = plx::CreateDevice3D(0);
+    d2d1_factory_ = plx::CreateD2D1FactoryST(D2D1_DEBUG_LEVEL_NONE);
+#endif
+    d2d_device_ = plx::CreateDeviceD2D1(d3d_device_, d2d_factory_);
+    dco_device_ = plx::CreateDCoDevice2(d2d_device_);
+    // create the composition target and the root visual.
+    dco_target_ = plx::CreateDCoWindowTarget(dco_device_, window());
+    root_visual_ = plx::CreateDCoVisual(dco_device_);
+    // bind direct composition to our window.
+    auto hr = dco_target_->SetRoot(root_visual_.Get());
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+    // allocate the gpu surface and bind it to the root visual.
+    root_surface_ = plx::CreateDCoSurface(
+        dco_device_,
+        static_cast<unsigned int>(dpi_.to_physical_x(width_)),
+        static_cast<unsigned int>(dpi_.to_physical_x(height_)));
+    hr = root_visual_->SetContent(root_surface_.Get());
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+    // $$ Clear(color) window here. That should be enough for it to be visible.
+    dco_device_->Commit();
   }
 
   LRESULT message_handler(const UINT message, WPARAM wparam, LPARAM lparam) {
