@@ -5,6 +5,7 @@
 
 
 
+#pragma comment(lib, "shcore.lib")
 namespace plx {
 ItRange<uint8_t*> RangeFromBytes(void* start, size_t count) {
   auto s = reinterpret_cast<uint8_t*>(start);
@@ -265,5 +266,3 @@ plx::JsonValue JsonFromFile(plx::File& cfile) {
   return plx::ParseJsonValue(json);
 }
 }
-
-extern "C" IMAGE_DOS_HEADER __ImageBase;
