@@ -222,7 +222,11 @@ public:
   }
 
   void new_char_handler(wchar_t code) {
-    paragraph_.append(1, code);
+    if ((code == VK_BACK) && (paragraph_.size() > 0))
+      paragraph_.resize(paragraph_.size() - 1);
+    else
+      paragraph_.append(1, code);
+
     auto size = D2D1::SizeF(static_cast<float>(width_), static_cast<float>(height_));
     plx::Range<const wchar_t> txt(paragraph_.c_str(), paragraph_.size());
     auto layout = CreateDWTextLayout(dwrite_factory_, text_fmt_, txt, size);
