@@ -1,6 +1,10 @@
 #include "stdafx.h"
 #include "resource.h"
 
+namespace ui_txt {
+  const wchar_t gretting[] = L"Welcome to TExTO editor";
+}
+
 enum class HardFailures {
   none,
   bad_config,
@@ -90,6 +94,20 @@ plx::ComPtr<IDWriteTextFormat> CreateDWriteTextFormat(
   return format;
 }
 
+plx::ComPtr<IDWriteTextLayout> CreateDWTextLayout(
+  plx::ComPtr<IDWriteFactory> dw_factory, plx::ComPtr<IDWriteTextFormat> format,
+  const plx::Range<const wchar_t>& text, const D2D1_SIZE_F& size) {
+  plx::ComPtr<IDWriteTextLayout> layout;
+  auto hr = dw_factory->CreateTextLayout(
+      text.start(), plx::To<UINT32>(text.size()),
+      format.Get(),
+      size.width, size.height,
+      layout.GetAddressOf());
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+  return layout;
+}
+
 class DCoWindow : public plx::Window <DCoWindow> {
   // width and height are in logical pixels.
   const int width_;
@@ -102,7 +120,10 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<IDCompositionTarget> dco_target_;
   plx::ComPtr<IDCompositionVisual2> root_visual_;
   plx::ComPtr<IDCompositionSurface> root_surface_;
-  plx::ComPtr<IDWriteTextFormat> text_fmt;
+  plx::ComPtr<IDWriteFactory> dwrite_factory_;
+  plx::ComPtr<IDWriteTextFormat> text_fmt_;
+
+  std::wstring paragraph_;
 
 public:
   DCoWindow(int width, int height) : width_(width), height_(height) {
@@ -140,14 +161,15 @@ public:
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
 
-    auto dwrite_factory = CreateDWriteFactory();
-    text_fmt = CreateDWriteTextFormat(
-        dwrite_factory, L"Candara", DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+    dwrite_factory_ = CreateDWriteFactory();
+    text_fmt_ = CreateDWriteTextFormat(
+        dwrite_factory_, L"Candara", DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL, 30.0f);
 
-    plx::ComPtr<IDWriteTextLayout> text_layout;
-    const wchar_t gretting[] = L"Welcome to TExTO editor";
-    dwrite_factory->CreateTextLayout(gretting, _countof(gretting), text_fmt.Get(), 500.0f, 500.0f, text_layout.GetAddressOf());
+    //// Render start UI ////////////////////////////////////////////////////////////////////
+    auto txt = plx::RangeFromLitStr(ui_txt::gretting);
+    auto size = D2D1::SizeF(static_cast<float>(width_), static_cast<float>(height_));
+    auto greetings = CreateDWTextLayout(dwrite_factory_, text_fmt_, txt, size);
 
     // Draw gray translucent emptyness.
     {
@@ -156,7 +178,7 @@ public:
 
       plx::ComPtr<ID2D1SolidColorBrush> brush;
       dc->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.5f, 1.0f, 1.0f), brush.GetAddressOf());
-      dc->DrawTextLayout(D2D1::Point2F(2.0f, 2.0f), text_layout.Get(), brush.Get());
+      dc->DrawTextLayout(D2D1::Point2F(2.0f, 2.0f), greetings.Get(), brush.Get());
     }
     dco_device_->Commit();
   }
@@ -171,17 +193,22 @@ public:
         paint_handler();
         break;
       }
-      case WM_LBUTTONDOWN: {
-        return left_mouse_button_handler(MAKEPOINTS(lparam));
-      }
-      case WM_MOUSEMOVE: {
-        return mouse_move_handler(wparam, MAKEPOINTS(lparam));
+      case WM_CHAR: {
+        new_char_handler(static_cast<wchar_t>(wparam));
+        return 0L;
       }
       case WM_WINDOWPOSCHANGING: {
         // send to fixed size windows when there is a device loss. do nothing
         // to prevent the default window proc from resizing to 640x400.
         return 0;
       }
+      case WM_MOUSEMOVE: {
+        return mouse_move_handler(wparam, MAKEPOINTS(lparam));
+      }
+      case WM_LBUTTONDOWN: {
+        return left_mouse_button_handler(MAKEPOINTS(lparam));
+      }
+
       case WM_DPICHANGED: {
         return dpi_changed_handler(lparam);
       }
@@ -192,6 +219,23 @@ public:
 
   void paint_handler() {
     // just recovery here when using direct composition.
+  }
+
+  void new_char_handler(wchar_t code) {
+    paragraph_.append(1, code);
+    auto size = D2D1::SizeF(static_cast<float>(width_), static_cast<float>(height_));
+    plx::Range<const wchar_t> txt(paragraph_.c_str(), paragraph_.size());
+    auto layout = CreateDWTextLayout(dwrite_factory_, text_fmt_, txt, size);
+
+    {
+      ScopedDraw sd(root_surface_, dpi_);
+      auto dc = sd.begin(D2D1::ColorF(0.1f, 0.1f, 0.1f, 0.9f), zero_offset);
+
+      plx::ComPtr<ID2D1SolidColorBrush> brush;
+      dc->CreateSolidColorBrush(D2D1::ColorF(0.9f, 0.9f, 0.8f, 1.0f), brush.GetAddressOf());
+      dc->DrawTextLayout(D2D1::Point2F(2.0f, 2.0f), layout.Get(), brush.Get());
+    }
+    dco_device_->Commit();
   }
 
   LRESULT left_mouse_button_handler(POINTS pts) {
