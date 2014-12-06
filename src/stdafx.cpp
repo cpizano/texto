@@ -5,6 +5,7 @@
 
 
 
+#pragma comment(lib, "dwrite.lib")
 #pragma comment(lib, "shcore.lib")
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "d3d11.lib")

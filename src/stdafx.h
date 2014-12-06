@@ -9,6 +9,7 @@
 
 
 
+#include <dwrite.h>
 #include <shellscalingapi.h>
 #include <Shlobj.h>
 #include <d2d1_2.h>

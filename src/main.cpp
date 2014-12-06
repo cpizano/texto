@@ -66,6 +66,30 @@ public:
   }
 };
 
+plx::ComPtr<IDWriteFactory> CreateDWriteFactory() {
+  plx::ComPtr<IDWriteFactory> factory;
+  auto hr = ::DWriteCreateFactory(
+      DWRITE_FACTORY_TYPE_SHARED,
+      __uuidof(IDWriteFactory),
+      reinterpret_cast<IUnknown**>(factory.GetAddressOf()));
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+  return factory;
+}
+
+plx::ComPtr<IDWriteTextFormat> CreateDWriteTextFormat(
+    plx::ComPtr<IDWriteFactory> dw_factory,
+    const wchar_t* font_family,
+    DWRITE_FONT_WEIGHT weight, DWRITE_FONT_STYLE style,
+    DWRITE_FONT_STRETCH stretch, float size) {
+  plx::ComPtr<IDWriteTextFormat> format;
+  auto hr = dw_factory->CreateTextFormat(
+      font_family, nullptr, weight, style, stretch, size, L"", format.GetAddressOf());
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+  return format;
+}
+
 class DCoWindow : public plx::Window <DCoWindow> {
   // width and height are in logical pixels.
   const int width_;
@@ -78,6 +102,7 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<IDCompositionTarget> dco_target_;
   plx::ComPtr<IDCompositionVisual2> root_visual_;
   plx::ComPtr<IDCompositionSurface> root_surface_;
+  plx::ComPtr<IDWriteTextFormat> text_fmt;
 
 public:
   DCoWindow(int width, int height) : width_(width), height_(height) {
@@ -114,10 +139,24 @@ public:
     hr = root_visual_->SetContent(root_surface_.Get());
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
+
+    auto dwrite_factory = CreateDWriteFactory();
+    text_fmt = CreateDWriteTextFormat(
+        dwrite_factory, L"Candara", DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL, 30.0f);
+
+    plx::ComPtr<IDWriteTextLayout> text_layout;
+    const wchar_t gretting[] = L"Welcome to TExTO editor";
+    dwrite_factory->CreateTextLayout(gretting, _countof(gretting), text_fmt.Get(), 500.0f, 500.0f, text_layout.GetAddressOf());
+
     // Draw gray translucent emptyness.
     {
       ScopedDraw sd(root_surface_, dpi_);
       auto dc = sd.begin(D2D1::ColorF(0.3f, 0.3f, 0.3f, 0.7f), zero_offset);
+
+      plx::ComPtr<ID2D1SolidColorBrush> brush;
+      dc->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.5f, 1.0f, 1.0f), brush.GetAddressOf());
+      dc->DrawTextLayout(D2D1::Point2F(2.0f, 2.0f), text_layout.Get(), brush.Get());
     }
     dco_device_->Commit();
   }
