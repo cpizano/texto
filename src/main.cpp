@@ -120,6 +120,10 @@ class DCoWindow : public plx::Window <DCoWindow> {
   const int width_;
   const int height_;
 
+  // the margins are insets from (width and height).
+  D2D1_POINT_2F margin_tl_;
+  D2D1_POINT_2F margin_br_;
+
   std::wstring paragraph_;
 
   plx::ComPtr<ID3D11Device> d3d_device_;
@@ -136,6 +140,10 @@ class DCoWindow : public plx::Window <DCoWindow> {
 
 public:
   DCoWindow(int width, int height) : width_(width), height_(height) {
+    // $$ read from config.
+    margin_tl_ = D2D1::Point2F(12.0f, 12.0f);
+    margin_br_ = D2D1::Point2F(6.0f, 16.0f);
+
     create_window(WS_EX_NOREDIRECTIONBITMAP,
                   WS_POPUP | WS_VISIBLE,
                   L"texto @ 2014",
@@ -245,7 +253,10 @@ public:
     else
       paragraph_.append(1, code);
 
-    auto size = D2D1::SizeF(static_cast<float>(width_), static_cast<float>(height_));
+    auto size = D2D1::SizeF(
+      static_cast<float>(width_) - margin_tl_.x - margin_br_.x,
+      static_cast<float>(height_)- margin_tl_.y - margin_tl_.y);
+
     plx::Range<const wchar_t> txt(paragraph_.c_str(), paragraph_.size());
     auto layout = CreateDWTextLayout(dwrite_factory_, text_fmt_, txt, size);
 
@@ -253,14 +264,13 @@ public:
       ScopedDraw sd(root_surface_, dpi_);
       auto dc = sd.begin(D2D1::ColorF(0.1f, 0.1f, 0.1f, 0.9f), zero_offset);
 
-      auto offset = D2D1::Point2F(2.0f, 2.0f);
-      dc->DrawTextLayout(offset, layout.Get(), brushes_[brush_text].Get());
+      dc->DrawTextLayout(margin_tl_, layout.Get(), brushes_[brush_text].Get());
 
       DWRITE_TEXT_METRICS metrics = {0};
       layout->GetMetrics(&metrics);
       dc->DrawRectangle(
-          D2D1::RectF(metrics.left + offset.x, metrics.top + offset.y,
-                      metrics.width + offset.x, metrics.height + offset.y),
+          D2D1::RectF(metrics.left + margin_tl_.x, metrics.top + margin_tl_.y,
+                      metrics.width + margin_tl_.x, metrics.height + margin_tl_.y),
           brushes_[brush_red].Get());
 
     }
