@@ -108,10 +108,19 @@ plx::ComPtr<IDWriteTextLayout> CreateDWTextLayout(
   return layout;
 }
 
+enum Brushes {
+  brush_black,
+  brush_red,
+  brush_text,
+  brush_last
+};
+
 class DCoWindow : public plx::Window <DCoWindow> {
   // width and height are in logical pixels.
   const int width_;
   const int height_;
+
+  std::wstring paragraph_;
 
   plx::ComPtr<ID3D11Device> d3d_device_;
   plx::ComPtr<ID2D1Factory2> d2d_factory_;
@@ -123,7 +132,7 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<IDWriteFactory> dwrite_factory_;
   plx::ComPtr<IDWriteTextFormat> text_fmt_;
 
-  std::wstring paragraph_;
+  plx::ComPtr<ID2D1SolidColorBrush> brushes_[brush_last];
 
 public:
   DCoWindow(int width, int height) : width_(width), height_(height) {
@@ -166,15 +175,22 @@ public:
         dwrite_factory_, L"Candara", DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL, 30.0f);
 
-    //// Render start UI ////////////////////////////////////////////////////////////////////
-    auto txt = plx::RangeFromLitStr(ui_txt::gretting);
-    auto size = D2D1::SizeF(static_cast<float>(width_), static_cast<float>(height_));
-    auto greetings = CreateDWTextLayout(dwrite_factory_, text_fmt_, txt, size);
-
-    // Draw gray translucent emptyness.
     {
       ScopedDraw sd(root_surface_, dpi_);
       auto dc = sd.begin(D2D1::ColorF(0.3f, 0.3f, 0.3f, 0.7f), zero_offset);
+
+      // create solid brushes.
+      dc->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f), 
+          brushes_[brush_black].GetAddressOf());
+      dc->CreateSolidColorBrush(D2D1::ColorF(9.0f, 0.0f, 0.0f, 1.0f), 
+          brushes_[brush_red].GetAddressOf());
+      dc->CreateSolidColorBrush(D2D1::ColorF(0.9f, 0.9f, 0.8f, 1.0f), 
+          brushes_[brush_text].GetAddressOf());
+
+      //// Render start UI ////////////////////////////////////////////////////////////////////
+      auto txt = plx::RangeFromLitStr(ui_txt::gretting);
+      auto size = D2D1::SizeF(static_cast<float>(width_), static_cast<float>(height_));
+      auto greetings = CreateDWTextLayout(dwrite_factory_, text_fmt_, txt, size);
 
       plx::ComPtr<ID2D1SolidColorBrush> brush;
       dc->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.5f, 1.0f, 1.0f), brush.GetAddressOf());
@@ -222,8 +238,10 @@ public:
   }
 
   void new_char_handler(wchar_t code) {
-    if ((code == VK_BACK) && (paragraph_.size() > 0))
+    if ((code == 0x08) && (paragraph_.size() > 0))
       paragraph_.resize(paragraph_.size() - 1);
+    else if (code == 0x0D)
+      paragraph_.append(L"\n");
     else
       paragraph_.append(1, code);
 
@@ -235,9 +253,16 @@ public:
       ScopedDraw sd(root_surface_, dpi_);
       auto dc = sd.begin(D2D1::ColorF(0.1f, 0.1f, 0.1f, 0.9f), zero_offset);
 
-      plx::ComPtr<ID2D1SolidColorBrush> brush;
-      dc->CreateSolidColorBrush(D2D1::ColorF(0.9f, 0.9f, 0.8f, 1.0f), brush.GetAddressOf());
-      dc->DrawTextLayout(D2D1::Point2F(2.0f, 2.0f), layout.Get(), brush.Get());
+      auto offset = D2D1::Point2F(2.0f, 2.0f);
+      dc->DrawTextLayout(offset, layout.Get(), brushes_[brush_text].Get());
+
+      DWRITE_TEXT_METRICS metrics = {0};
+      layout->GetMetrics(&metrics);
+      dc->DrawRectangle(
+          D2D1::RectF(metrics.left + offset.x, metrics.top + offset.y,
+                      metrics.width + offset.x, metrics.height + offset.y),
+          brushes_[brush_red].Get());
+
     }
     dco_device_->Commit();
   }
