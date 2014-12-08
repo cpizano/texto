@@ -115,6 +115,21 @@ enum Brushes {
   brush_last
 };
 
+struct TextBlock {
+  static const size_t max_size = 100;
+
+  std::wstring text;
+  DWRITE_TEXT_METRICS metrics;
+  plx::ComPtr<IDWriteTextLayout> layout;
+};
+
+struct Cursor {
+  int block;
+  size_t offset;
+
+  Cursor() : block(-1), offset(0) {}
+};
+
 class DCoWindow : public plx::Window <DCoWindow> {
   // width and height are in logical pixels.
   const int width_;
@@ -124,7 +139,9 @@ class DCoWindow : public plx::Window <DCoWindow> {
   D2D1_POINT_2F margin_tl_;
   D2D1_POINT_2F margin_br_;
 
-  std::wstring paragraph_;
+  std::vector<TextBlock> text_;
+  Cursor cursor_;
+  float scroll_v_;
 
   plx::ComPtr<ID3D11Device> d3d_device_;
   plx::ComPtr<ID2D1Factory2> d2d_factory_;
@@ -133,17 +150,23 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<IDCompositionTarget> dco_target_;
   plx::ComPtr<IDCompositionVisual2> root_visual_;
   plx::ComPtr<IDCompositionSurface> root_surface_;
+
   plx::ComPtr<IDWriteFactory> dwrite_factory_;
   plx::ComPtr<IDWriteTextFormat> text_fmt_;
 
   plx::ComPtr<ID2D1SolidColorBrush> brushes_[brush_last];
 
 public:
-  DCoWindow(int width, int height) : width_(width), height_(height) {
+  DCoWindow(int width, int height) : width_(width), height_(height), scroll_v_(0.0f) {
     // $$ read from config.
     margin_tl_ = D2D1::Point2F(12.0f, 12.0f);
     margin_br_ = D2D1::Point2F(6.0f, 16.0f);
 
+    // init the text system.
+    text_.resize(1);
+    cursor_.block = 0;
+
+    // create the window.
     create_window(WS_EX_NOREDIRECTIONBITMAP,
                   WS_POPUP | WS_VISIBLE,
                   L"texto @ 2014",
@@ -181,7 +204,7 @@ public:
     dwrite_factory_ = CreateDWriteFactory();
     text_fmt_ = CreateDWriteTextFormat(
         dwrite_factory_, L"Candara", DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL, 30.0f);
+        DWRITE_FONT_STRETCH_NORMAL, 20.0f);
 
     {
       ScopedDraw sd(root_surface_, dpi_);
@@ -246,35 +269,10 @@ public:
   }
 
   void new_char_handler(wchar_t code) {
-    if ((code == 0x08) && (paragraph_.size() > 0))
-      paragraph_.resize(paragraph_.size() - 1);
-    else if (code == 0x0D)
-      paragraph_.append(L"\n");
+    if (code == 0x0D)
+      add_character('\n');
     else
-      paragraph_.append(1, code);
-
-    auto size = D2D1::SizeF(
-      static_cast<float>(width_) - margin_tl_.x - margin_br_.x,
-      static_cast<float>(height_)- margin_tl_.y - margin_tl_.y);
-
-    plx::Range<const wchar_t> txt(paragraph_.c_str(), paragraph_.size());
-    auto layout = CreateDWTextLayout(dwrite_factory_, text_fmt_, txt, size);
-
-    {
-      ScopedDraw sd(root_surface_, dpi_);
-      auto dc = sd.begin(D2D1::ColorF(0.1f, 0.1f, 0.1f, 0.9f), zero_offset);
-
-      dc->DrawTextLayout(margin_tl_, layout.Get(), brushes_[brush_text].Get());
-
-      DWRITE_TEXT_METRICS metrics = {0};
-      layout->GetMetrics(&metrics);
-      dc->DrawRectangle(
-          D2D1::RectF(metrics.left + margin_tl_.x, metrics.top + margin_tl_.y,
-                      metrics.width + margin_tl_.x, metrics.height + margin_tl_.y),
-          brushes_[brush_red].Get());
-
-    }
-    dco_device_->Commit();
+      add_character(code);
   }
 
   LRESULT left_mouse_button_handler(POINTS pts) {
@@ -300,6 +298,88 @@ public:
                    r.width(), r.height(),
                    SWP_NOACTIVATE | SWP_NOZORDER);
     return 0;
+  }
+
+  void add_character(wchar_t ch) {
+    bool needs_layout = false;
+
+    auto& block = text_[cursor_.block];
+    if (ch == '\n') {
+      // start a new block if necessary.
+      if (block.text.size() >= TextBlock::max_size) {
+        text_.emplace_back();
+        ++cursor_.block;
+        cursor_.offset = 0;
+        return;
+      } else {
+        block.text.append(1, ch);
+        ++cursor_.offset;
+      }
+    } else if (ch == 0x08) {
+      // delete last character.
+      if (!block.text.empty()) {
+        block.text.resize(block.text.size() -1);
+        --cursor_.offset;
+        needs_layout = true;
+      } else {
+        if (cursor_.block == 0)
+          return;
+        // not the first block, it can be deleted.
+        auto it = begin(text_) + cursor_.block;
+        text_.erase(it);
+        --cursor_.block;
+        cursor_.offset = text_[cursor_.block].text.size();
+      }
+    } else {
+      // add a character in the current block.
+      block.text.append(1, ch);
+      ++cursor_.offset;
+      needs_layout = true;
+    }
+
+    if (needs_layout) {
+      // Need to re-layout.
+      auto box = D2D1::SizeF(
+          static_cast<float>(width_) - margin_tl_.x - margin_br_.x,
+          static_cast<float>(height_)- margin_tl_.y - margin_tl_.y);
+      plx::Range<const wchar_t> txt(block.text.c_str(), block.text.size());
+      block.layout = CreateDWTextLayout(dwrite_factory_, text_fmt_, txt, box);
+      auto hr = block.layout->GetMetrics(&block.metrics);
+      if (hr != S_OK) {
+        __debugbreak();
+      }
+    }
+    update_screen();
+  }
+
+  void update_screen() {
+    {
+      ScopedDraw sd(root_surface_, dpi_);
+      auto dc = sd.begin(D2D1::ColorF(0.1f, 0.1f, 0.1f, 0.9f), zero_offset);
+
+      float bottom = 0.0f;
+      auto v_min = scroll_v_;
+      auto v_max = scroll_v_ + static_cast<float>(height_);
+
+      for (auto& tb : text_) {
+        tb.metrics.top = bottom;
+        bottom += tb.metrics.height;
+
+        if (((bottom > v_min) && (bottom < v_max)) || 
+            ((tb.metrics.top > v_min) && (tb.metrics.top < v_max))) {
+          // in view, paint it.
+          dc->SetTransform(D2D1::Matrix3x2F::Translation(0.0f, tb.metrics.top));
+          dc->DrawTextLayout(margin_tl_, tb.layout.Get(), brushes_[brush_text].Get()); 
+          // debugging rectangle.
+          dc->DrawRectangle(
+              D2D1::RectF(tb.metrics.left + margin_tl_.x,  margin_tl_.y,
+                          tb.metrics.width + margin_tl_.x, tb.metrics.height + margin_tl_.y),
+              brushes_[brush_red].Get(),
+              0.5f);
+        }
+      }
+    }
+    dco_device_->Commit();
   }
 
 };
