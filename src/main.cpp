@@ -240,14 +240,27 @@ public:
         paint_handler();
         break;
       }
-      case WM_CHAR: {
-        new_char_handler(static_cast<wchar_t>(wparam));
-        return 0L;
-      }
+#if 0
       case WM_WINDOWPOSCHANGING: {
         // send to fixed size windows when there is a device loss. do nothing
         // to prevent the default window proc from resizing to 640x400.
         return 0;
+      }
+#endif
+      case WM_KEYDOWN: {
+        if (wparam == VK_DOWN) {
+          scroll_v_ += 24.0f;
+          update_screen();
+        }
+        if (wparam == VK_UP) {
+          scroll_v_ -= 24.0f;
+          update_screen();
+        }
+        return 0L;
+      }
+      case WM_CHAR: {
+        new_char_handler(static_cast<wchar_t>(wparam));
+        return 0L;
       }
       case WM_MOUSEMOVE: {
         return mouse_move_handler(wparam, MAKEPOINTS(lparam));
@@ -368,7 +381,7 @@ public:
         if (((bottom > v_min) && (bottom < v_max)) || 
             ((tb.metrics.top > v_min) && (tb.metrics.top < v_max))) {
           // in view, paint it.
-          dc->SetTransform(D2D1::Matrix3x2F::Translation(0.0f, tb.metrics.top));
+          dc->SetTransform(D2D1::Matrix3x2F::Translation(0.0f, tb.metrics.top - scroll_v_));
           dc->DrawTextLayout(margin_tl_, tb.layout.Get(), brushes_[brush_text].Get()); 
           // debugging rectangle.
           dc->DrawRectangle(
