@@ -2,7 +2,10 @@
 #include "resource.h"
 
 namespace ui_txt {
-  const wchar_t gretting[] = L"Welcome to TExTO editor";
+  const wchar_t gretting[] = L"Welcome to the TExTO editor\n"
+                             L"      by AlienRancher      \n"
+                             L"                           \n"
+                             L" -- start typing to begin -- ";;
 }
 
 enum class HardFailures {
@@ -225,14 +228,14 @@ public:
 
     {
       ScopedDraw sd(root_surface_, dpi_);
-      auto dc = sd.begin(D2D1::ColorF(0.3f, 0.3f, 0.3f, 0.7f), zero_offset);
+      auto dc = sd.begin(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.9f), zero_offset);
 
       // create solid brushes.
       dc->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f), 
           brushes_[brush_black].GetAddressOf());
       dc->CreateSolidColorBrush(D2D1::ColorF(9.0f, 0.0f, 0.0f, 1.0f), 
           brushes_[brush_red].GetAddressOf());
-      dc->CreateSolidColorBrush(D2D1::ColorF(0.9f, 0.9f, 0.8f, 1.0f), 
+      dc->CreateSolidColorBrush(D2D1::ColorF(RGB(57, 135, 214), 1.0), 
           brushes_[brush_text].GetAddressOf());
 
       //// Render start UI ////////////////////////////////////////////////////////////////////
@@ -241,8 +244,11 @@ public:
       auto greetings = CreateDWTextLayout(dwrite_factory_, text_fmt_, txt, size);
 
       plx::ComPtr<ID2D1SolidColorBrush> brush;
-      dc->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.5f, 1.0f, 1.0f), brush.GetAddressOf());
-      dc->DrawTextLayout(D2D1::Point2F(2.0f, 2.0f), greetings.Get(), brush.Get());
+      dc->CreateSolidColorBrush(D2D1::ColorF(RGB(74, 174, 0), 1.0), brush.GetAddressOf());
+      DWRITE_TEXT_METRICS text_metrics;
+      greetings->GetMetrics(&text_metrics);
+      auto offset_x = (static_cast<float>(width_) - text_metrics.width) / 2.0f; 
+      dc->DrawTextLayout(D2D1::Point2F(offset_x, 40.0f), greetings.Get(), brush.Get());
     }
     dco_device_->Commit();
   }
@@ -403,7 +409,7 @@ public:
   void update_screen() {
     {
       ScopedDraw sd(root_surface_, dpi_);
-      auto dc = sd.begin(D2D1::ColorF(0.1f, 0.1f, 0.1f, 0.9f), zero_offset);
+      auto dc = sd.begin(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.9f), zero_offset);
       dc->DrawGeometry(circle_geom_.Get(), brushes_[brush_red].Get());
 
       float bottom = 0.0f;
