@@ -180,8 +180,8 @@ public:
     d3d_device_ = plx::CreateDeviceD3D11(D3D11_CREATE_DEVICE_DEBUG);
     d2d_factory_ = plx::CreateD2D1FactoryST(D2D1_DEBUG_LEVEL_INFORMATION);
 #else
-    d3d_device_ = plx::CreateDevice3D(0);
-    d2d1_factory_ = plx::CreateD2D1FactoryST(D2D1_DEBUG_LEVEL_NONE);
+    d3d_device_ = plx::CreateDeviceD3D11(0);
+    d2d_factory_ = plx::CreateD2D1FactoryST(D2D1_DEBUG_LEVEL_NONE);
 #endif
     d2d_device_ = plx::CreateDeviceD2D1(d3d_device_, d2d_factory_);
     dco_device_ = plx::CreateDCoDevice2(d2d_device_);
@@ -249,12 +249,8 @@ public:
 #endif
       case WM_KEYDOWN: {
         if (wparam == VK_DOWN) {
-          scroll_v_ += 24.0f;
-          update_screen();
         }
         if (wparam == VK_UP) {
-          scroll_v_ -= 24.0f;
-          update_screen();
         }
         return 0L;
       }
@@ -268,7 +264,9 @@ public:
       case WM_LBUTTONDOWN: {
         return left_mouse_button_handler(MAKEPOINTS(lparam));
       }
-
+      case WM_MOUSEWHEEL: {
+        return mouse_wheel_handler(HIWORD(wparam), LOWORD(wparam));
+      }
       case WM_DPICHANGED: {
         return dpi_changed_handler(lparam);
       }
@@ -293,6 +291,13 @@ public:
   }
 
   LRESULT mouse_move_handler(UINT_PTR state, POINTS pts) {
+    return 0;
+  }
+
+  LRESULT mouse_wheel_handler(int16_t offset, int16_t vkey) {
+    // $$ read the divisor from the config file.
+    scroll_v_ += offset / 4;
+    update_screen();
     return 0;
   }
 
