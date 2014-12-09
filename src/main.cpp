@@ -70,6 +70,16 @@ public:
   }
 };
 
+plx::ComPtr<ID2D1Geometry> CreateD2D1Geometry(
+    plx::ComPtr<ID2D1Factory2> d2d1_factory,
+    const D2D1_ELLIPSE& ellipse) {
+  plx::ComPtr<ID2D1EllipseGeometry> geometry;
+  auto hr = d2d1_factory->CreateEllipseGeometry(ellipse, geometry.GetAddressOf());
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+  return geometry;
+}
+
 plx::ComPtr<IDWriteFactory> CreateDWriteFactory() {
   plx::ComPtr<IDWriteFactory> factory;
   auto hr = ::DWriteCreateFactory(
@@ -151,15 +161,18 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<IDCompositionVisual2> root_visual_;
   plx::ComPtr<IDCompositionSurface> root_surface_;
 
+  plx::ComPtr<ID2D1Geometry> circle_geom_;
+
   plx::ComPtr<IDWriteFactory> dwrite_factory_;
   plx::ComPtr<IDWriteTextFormat> text_fmt_;
 
   plx::ComPtr<ID2D1SolidColorBrush> brushes_[brush_last];
 
 public:
-  DCoWindow(int width, int height) : width_(width), height_(height), scroll_v_(0.0f) {
+  DCoWindow(int width, int height)
+      : width_(width), height_(height), scroll_v_(0.0f) {
     // $$ read from config.
-    margin_tl_ = D2D1::Point2F(12.0f, 12.0f);
+    margin_tl_ = D2D1::Point2F(12.0f, 36.0f);
     margin_br_ = D2D1::Point2F(6.0f, 16.0f);
 
     // init the text system.
@@ -200,6 +213,10 @@ public:
     hr = root_visual_->SetContent(root_surface_.Get());
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
+
+    circle_geom_ = CreateD2D1Geometry(
+        d2d_factory_,
+        D2D1::Ellipse(D2D1::Point2F(width_ - 18.0f , 18.0f), 8.0f, 8.0f));
 
     dwrite_factory_ = CreateDWriteFactory();
     text_fmt_ = CreateDWriteTextFormat(
@@ -262,7 +279,10 @@ public:
         return mouse_move_handler(wparam, MAKEPOINTS(lparam));
       }
       case WM_LBUTTONDOWN: {
-        return left_mouse_button_handler(MAKEPOINTS(lparam));
+        return left_mouse_button_handler(true, MAKEPOINTS(lparam));
+      }
+      case WM_LBUTTONUP: {
+        return left_mouse_button_handler(false, MAKEPOINTS(lparam));
       }
       case WM_MOUSEWHEEL: {
         return mouse_wheel_handler(HIWORD(wparam), LOWORD(wparam));
@@ -286,7 +306,17 @@ public:
       add_character(code);
   }
 
-  LRESULT left_mouse_button_handler(POINTS pts) {
+  LRESULT left_mouse_button_handler(bool down, POINTS pts) {
+    if (down) {
+      BOOL hit = 0;
+      circle_geom_->FillContainsPoint(
+          D2D1::Point2F(pts.x, pts.y), D2D1::Matrix3x2F::Identity(), &hit);
+      if (hit != 0) {
+        ::SendMessageW(window(), WM_SYSCOMMAND, SC_MOVE|0x0002, 0);
+      }
+    } else {
+
+    }
     return 0;
   }
 
@@ -374,6 +404,7 @@ public:
     {
       ScopedDraw sd(root_surface_, dpi_);
       auto dc = sd.begin(D2D1::ColorF(0.1f, 0.1f, 0.1f, 0.9f), zero_offset);
+      dc->DrawGeometry(circle_geom_.Get(), brushes_[brush_red].Get());
 
       float bottom = 0.0f;
       auto v_min = scroll_v_;
