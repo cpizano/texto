@@ -231,11 +231,11 @@ public:
       auto dc = sd.begin(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.9f), zero_offset);
 
       // create solid brushes.
-      dc->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f), 
+      dc->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black, 1.0f), 
           brushes_[brush_black].GetAddressOf());
-      dc->CreateSolidColorBrush(D2D1::ColorF(9.0f, 0.0f, 0.0f, 1.0f), 
+      dc->CreateSolidColorBrush(D2D1::ColorF(0xE90000, 1.0f), 
           brushes_[brush_red].GetAddressOf());
-      dc->CreateSolidColorBrush(D2D1::ColorF(RGB(57, 135, 214), 1.0), 
+      dc->CreateSolidColorBrush(D2D1::ColorF(RGB(57, 135, 214), 1.0f), 
           brushes_[brush_text].GetAddressOf());
 
       //// Render start UI ////////////////////////////////////////////////////////////////////
@@ -426,11 +426,11 @@ public:
           dc->SetTransform(D2D1::Matrix3x2F::Translation(0.0f, tb.metrics.top - scroll_v_));
           dc->DrawTextLayout(margin_tl_, tb.layout.Get(), brushes_[brush_text].Get()); 
           // debugging rectangle.
-          dc->DrawRectangle(
-              D2D1::RectF(tb.metrics.left + margin_tl_.x,  margin_tl_.y,
-                          tb.metrics.width + margin_tl_.x, tb.metrics.height + margin_tl_.y),
-              brushes_[brush_red].Get(),
-              0.5f);
+          dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+          auto debug_rect = 
+              D2D1::RectF(tb.metrics.left + margin_tl_.x, margin_tl_.y,
+                          tb.metrics.width + margin_tl_.x, tb.metrics.height + margin_tl_.y);
+          dc->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f);
         }
       }
     }
