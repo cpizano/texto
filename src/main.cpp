@@ -143,10 +143,18 @@ struct Cursor {
   Cursor() : block(-1), offset(0) {}
 };
 
+enum FlagOptions {
+  debug_text_boxes,
+  opacity_50_percent,
+  flag_op_last
+};
+
 class DCoWindow : public plx::Window <DCoWindow> {
   // width and height are in logical pixels.
   const int width_;
   const int height_;
+
+  std::bitset<flag_op_last> flag_options_;
 
   // the margins are insets from (width and height).
   D2D1_POINT_2F margin_tl_;
@@ -281,6 +289,9 @@ public:
         new_char_handler(static_cast<wchar_t>(wparam));
         return 0L;
       }
+      case WM_COMMAND: {
+        return ui_command_handler(LOWORD(wparam));
+      }
       case WM_MOUSEMOVE: {
         return mouse_move_handler(wparam, MAKEPOINTS(lparam));
       }
@@ -354,6 +365,17 @@ public:
     return 0;
   }
 
+  LRESULT ui_command_handler(int command_id) {
+    if (command_id == IDC_DBG_TEXT_BOXES) {
+      flag_options_[debug_text_boxes].flip();
+    }
+    if (command_id == IDC_50P_TRANSPARENT) {
+      flag_options_[opacity_50_percent].flip();
+    }
+    update_screen();
+    return 0;
+  }
+
   void add_character(wchar_t ch) {
     bool needs_layout = false;
 
@@ -409,7 +431,8 @@ public:
   void update_screen() {
     {
       ScopedDraw sd(root_surface_, dpi_);
-      auto dc = sd.begin(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.9f), zero_offset);
+      auto bk_alpha = flag_options_[opacity_50_percent] ? 0.5f : 0.9f;
+      auto dc = sd.begin(D2D1::ColorF(0x000000, bk_alpha), zero_offset);
       dc->DrawGeometry(circle_geom_.Get(), brushes_[brush_red].Get());
 
       float bottom = 0.0f;
@@ -426,11 +449,13 @@ public:
           dc->SetTransform(D2D1::Matrix3x2F::Translation(0.0f, tb.metrics.top - scroll_v_));
           dc->DrawTextLayout(margin_tl_, tb.layout.Get(), brushes_[brush_text].Get()); 
           // debugging rectangle.
-          dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
-          auto debug_rect = 
-              D2D1::RectF(tb.metrics.left + margin_tl_.x, margin_tl_.y,
-                          tb.metrics.width + margin_tl_.x, tb.metrics.height + margin_tl_.y);
-          dc->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f);
+          if (flag_options_[debug_text_boxes]) {
+            dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+            auto debug_rect = 
+                D2D1::RectF(tb.metrics.left + margin_tl_.x, margin_tl_.y,
+                            tb.metrics.width + margin_tl_.x, tb.metrics.height + margin_tl_.y);
+            dc->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f);
+          }
         }
       }
     }
@@ -439,6 +464,15 @@ public:
 
 };
 
+HACCEL LoadAccelerators() {
+  // $$ read this from the config file.
+  ACCEL accelerators[] = {
+    {FVIRTKEY, VK_F10, IDC_DBG_TEXT_BOXES},
+    {FVIRTKEY, VK_F11, IDC_50P_TRANSPARENT},
+  };
+
+  return ::CreateAcceleratorTableW(accelerators, _countof(accelerators));
+}
 
 int __stdcall wWinMain(HINSTANCE instance, HINSTANCE,
                        wchar_t* cmdline, int cmd_show) {
@@ -446,8 +480,8 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE,
     auto settings = LoadSettings();
     DCoWindow window(settings.window_width, settings.window_height);
 
-    auto accel_table =
-        ::LoadAcceleratorsW( instance, MAKEINTRESOURCE(IDR_ACCEL_USA));
+    auto accel_table = LoadAccelerators();
+
     MSG msg = {0};
     while (::GetMessage(&msg, NULL, 0, 0)) {
       if (!::TranslateAccelerator(msg.hwnd, accel_table, &msg)) {

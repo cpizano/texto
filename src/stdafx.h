@@ -18,6 +18,7 @@
 #include <wrl.h>
 #include <string.h>
 #include <array>
+#include <bitset>
 #include <initializer_list>
 #include <cctype>
 #include <iterator>
