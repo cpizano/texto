@@ -30,6 +30,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <stdint.h>
 #include <windows.h>
 
 

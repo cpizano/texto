@@ -138,7 +138,7 @@ struct TextBlock {
 
 struct Cursor {
   int block;
-  size_t offset;
+  uint32_t offset;
 
   Cursor() : block(-1), offset(0) {}
 };
@@ -392,30 +392,37 @@ public:
 
     auto& block = text_[cursor_.block];
     if (ch == '\n') {
-      // start a new block if necessary.
+      // new line.
       if (block.text.size() >= TextBlock::max_size) {
+        // start a new block.
         text_.emplace_back();
         ++cursor_.block;
         cursor_.offset = 0;
-        return;
+        layout(text_[cursor_.block]);
       } else {
+        // new line goes in existing block.
         block.text.append(1, ch);
         ++cursor_.offset;
+        needs_layout = true;
       }
     } else if (ch == 0x08) {
-      // delete last character.
+      // deletion of one character.
       if (!block.text.empty()) {
+        // remove one letter.
         block.text.resize(block.text.size() -1);
         --cursor_.offset;
         needs_layout = true;
       } else {
-        if (cursor_.block == 0)
+        // block is empty.
+        if (cursor_.block == 0) {
+          // $$ flash or beep here.
           return;
+        }
         // not the first block, it can be deleted.
         auto it = begin(text_) + cursor_.block;
         text_.erase(it);
         --cursor_.block;
-        cursor_.offset = text_[cursor_.block].text.size();
+        cursor_.offset = plx::To<uint32_t>(text_[cursor_.block].text.size());
       }
     } else {
       // add a character in the current block.
@@ -459,6 +466,7 @@ public:
       auto v_min = scroll_v_;
       auto v_max = scroll_v_ + static_cast<float>(height_);
 
+      size_t block_number = 0;
       for (auto& tb : text_) {
         tb.metrics.top = bottom;
         bottom += tb.metrics.height;
@@ -476,7 +484,22 @@ public:
                             tb.metrics.width + margin_tl_.x, tb.metrics.height + margin_tl_.y);
             dc->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f);
           }
+          if (cursor_.block == block_number) {
+            // draw caret since it is visible.
+            dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+            DWRITE_HIT_TEST_METRICS hit_metrics;
+            float x, y;
+            auto hr = tb.layout->HitTestTextPosition(cursor_.offset, FALSE, &x, &y, &hit_metrics);
+            if (hr != S_OK)
+              throw plx::ComException(__LINE__, hr);
+            x += margin_tl_.x;
+            y += margin_tl_.y;
+            dc->DrawRectangle(
+                D2D1::RectF(x, y, x + 2.0f, y + hit_metrics.height),
+                brushes_[brush_red].Get());
+          }
         }
+        ++block_number;
       }
     }
     dco_device_->Commit();
