@@ -146,6 +146,7 @@ struct Cursor {
 enum FlagOptions {
   debug_text_boxes,
   opacity_50_percent,
+  alternate_font,
   flag_op_last
 };
 
@@ -175,7 +176,7 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<ID2D1Geometry> circle_geom_;
 
   plx::ComPtr<IDWriteFactory> dwrite_factory_;
-  plx::ComPtr<IDWriteTextFormat> text_fmt_;
+  plx::ComPtr<IDWriteTextFormat> text_fmt_[2];
 
   plx::ComPtr<ID2D1SolidColorBrush> brushes_[brush_last];
 
@@ -230,9 +231,12 @@ public:
         D2D1::Ellipse(D2D1::Point2F(width_ - 18.0f , 18.0f), 8.0f, 8.0f));
 
     dwrite_factory_ = CreateDWriteFactory();
-    text_fmt_ = CreateDWriteTextFormat(
+    text_fmt_[0] = CreateDWriteTextFormat(
         dwrite_factory_, L"Candara", DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL, 20.0f);
+    text_fmt_[1] = CreateDWriteTextFormat(
+        dwrite_factory_, L"Consolas", DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL, 16.0f);
 
     {
       ScopedDraw sd(root_surface_, dpi_);
@@ -247,9 +251,12 @@ public:
           brushes_[brush_text].GetAddressOf());
 
       //// Render start UI ////////////////////////////////////////////////////////////////////
+      auto title_fmt = CreateDWriteTextFormat(
+          dwrite_factory_, L"Candara", DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+          DWRITE_FONT_STRETCH_NORMAL, 24.0f);
       auto txt = plx::RangeFromLitStr(ui_txt::gretting);
       auto size = D2D1::SizeF(static_cast<float>(width_), static_cast<float>(height_));
-      auto greetings = CreateDWTextLayout(dwrite_factory_, text_fmt_, txt, size);
+      auto greetings = CreateDWTextLayout(dwrite_factory_, title_fmt, txt, size);
 
       plx::ComPtr<ID2D1SolidColorBrush> brush;
       dc->CreateSolidColorBrush(D2D1::ColorF(RGB(74, 174, 0), 1.0), brush.GetAddressOf());
@@ -372,6 +379,10 @@ public:
     if (command_id == IDC_50P_TRANSPARENT) {
       flag_options_[opacity_50_percent].flip();
     }
+    if (command_id == IDC_ALT_FONT) {
+      flag_options_[alternate_font].flip();
+      layout_all();
+    }
     update_screen();
     return 0;
   }
@@ -413,19 +424,28 @@ public:
       needs_layout = true;
     }
 
-    if (needs_layout) {
-      // Need to re-layout.
-      auto box = D2D1::SizeF(
-          static_cast<float>(width_) - margin_tl_.x - margin_br_.x,
-          static_cast<float>(height_)- margin_tl_.y - margin_tl_.y);
-      plx::Range<const wchar_t> txt(block.text.c_str(), block.text.size());
-      block.layout = CreateDWTextLayout(dwrite_factory_, text_fmt_, txt, box);
-      auto hr = block.layout->GetMetrics(&block.metrics);
-      if (hr != S_OK) {
-        __debugbreak();
-      }
-    }
+    if (needs_layout)
+      layout(block);
     update_screen();
+  }
+
+  void layout(TextBlock& block) {
+    auto box = D2D1::SizeF(
+        static_cast<float>(width_) - margin_tl_.x - margin_br_.x,
+        static_cast<float>(height_)- margin_tl_.y - margin_tl_.y);
+    plx::Range<const wchar_t> txt(block.text.c_str(), block.text.size());
+    auto fmt_index = flag_options_[alternate_font] ? 1 : 0;
+    block.layout = CreateDWTextLayout(dwrite_factory_, text_fmt_[fmt_index], txt, box);
+    auto hr = block.layout->GetMetrics(&block.metrics);
+    if (hr != S_OK) {
+      __debugbreak();
+    }
+  }
+
+  void layout_all() {
+    for (auto& tb : text_) {
+      layout(tb);
+    }
   }
 
   void update_screen() {
@@ -469,6 +489,7 @@ HACCEL LoadAccelerators() {
   ACCEL accelerators[] = {
     {FVIRTKEY, VK_F10, IDC_DBG_TEXT_BOXES},
     {FVIRTKEY, VK_F11, IDC_50P_TRANSPARENT},
+    {FVIRTKEY, VK_F9, IDC_ALT_FONT}
   };
 
   return ::CreateAcceleratorTableW(accelerators, _countof(accelerators));
