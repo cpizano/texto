@@ -197,16 +197,18 @@ public:
     offset_ = 0;
   }
 
-  void append_char(wchar_t ch) {
-    current_block().text.append(1, ch);
+  void insert_char(wchar_t ch) {
+    current_block().text.insert(offset_, 1, ch);
     ++offset_;
   }
 
   bool remove_char() {
     auto& txt = current_block().text;
+    if (offset_ == 0)
+      return false;   // $$$ handle erasure here.
+
     if (!txt.empty()) {
-      txt.resize(txt.size() -1);
-      --offset_;
+      txt.erase(--offset_, 1);
     } else if (block_ != 0) {
       auto it = begin(text_) + block_;
       text_.erase(it);
@@ -482,7 +484,7 @@ public:
         layout(cursor_.current_block());
       } else {
         // new line goes in existing block.
-        cursor_.append_char(ch);
+        cursor_.insert_char(ch);
         needs_layout = true;
       }
     } else if (ch == 0x08) {
@@ -491,7 +493,7 @@ public:
       needs_layout = true;
     } else {
       // add a character in the current block.
-      cursor_.append_char(ch);
+      cursor_.insert_char(ch);
       needs_layout = true;
     }
 
