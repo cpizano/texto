@@ -136,11 +136,88 @@ struct TextBlock {
   plx::ComPtr<IDWriteTextLayout> layout;
 };
 
-struct Cursor {
-  int block;
-  uint32_t offset;
+class Cursor {
+  uint32_t block_;
+  uint32_t offset_;
+  std::vector<TextBlock>& text_;
 
-  Cursor() : block(-1), offset(0) {}
+public:
+  Cursor(std::vector<TextBlock>& text) 
+      : text_(text), block_(0), offset_(0) {
+    text_.resize(1);
+  }
+
+  uint32_t block_len() const {
+    return plx::To<uint32_t>(current_block().text.size());
+  }
+
+  uint32_t current_offset() const {
+    return offset_;
+  }
+
+  uint32_t block_number() const {
+    return block_;
+  }
+
+  bool move_left() {
+    if (offset_ > 0) {
+      --offset_;
+    } else if (block_ > 0) {
+      --block_;
+      offset_ = block_len();
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  bool move_right() {
+    if (offset_ < block_len()) {
+      ++offset_;
+    } else if (block_ < (text_.size() - 1)) {
+      ++block_;
+      offset_ = 0;
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  TextBlock& current_block() {
+    return text_[block_];
+  }
+
+  const TextBlock& current_block() const {
+    return text_[block_];
+  }
+
+  void new_block() {
+    text_.emplace_back();
+    ++block_;
+    offset_ = 0;
+  }
+
+  void append_char(wchar_t ch) {
+    current_block().text.append(1, ch);
+    ++offset_;
+  }
+
+  bool remove_char() {
+    auto& txt = current_block().text;
+    if (!txt.empty()) {
+      txt.resize(txt.size() -1);
+      --offset_;
+    } else if (block_ != 0) {
+      auto it = begin(text_) + block_;
+      text_.erase(it);
+      --block_;
+      offset_ = block_len();
+    } else {
+      return false;
+    }
+    return true;
+  }
+
 };
 
 enum FlagOptions {
@@ -182,14 +259,13 @@ class DCoWindow : public plx::Window <DCoWindow> {
 
 public:
   DCoWindow(int width, int height)
-      : width_(width), height_(height), scroll_v_(0.0f) {
+      : width_(width), height_(height), cursor_(text_), scroll_v_(0.0f) {
     // $$ read from config.
     margin_tl_ = D2D1::Point2F(12.0f, 36.0f);
     margin_br_ = D2D1::Point2F(6.0f, 16.0f);
 
     // init the text system.
-    text_.resize(1);
-    cursor_.block = 0;
+
 
     // create the window.
     create_window(WS_EX_NOREDIRECTIONBITMAP,
@@ -313,26 +389,14 @@ public:
 
   LRESULT keydown_handler(int vkey) {
     if (vkey == VK_LEFT) {
-      if (cursor_.offset > 0) {
-        --cursor_.offset;
-      } else if (cursor_.block > 0) {
-        --cursor_.block;
-        cursor_.offset = plx::To<uint32_t>(text_[cursor_.block].text.size());
-      } else {
-        // $$ maybe just flash? read from config?
+      if (!cursor_.move_left()) {
         ::Beep(440, 10);
         return 0L;
       }
     }
     if (vkey == VK_RIGHT) {
-      if (cursor_.offset < text_[cursor_.block].text.size()) {
-        ++cursor_.offset;
-      } else if (cursor_.block < (text_.size() - 1)) {
-        ++cursor_.block;
-        cursor_.offset = 0;
-      } else {
-        // $$ maybe just flash? read from config?
-        ::Beep(340, 10);
+      if (!cursor_.move_right()) {
+        ::Beep(440, 10);
         return 0L;
       }
     }
@@ -409,44 +473,25 @@ public:
   void add_character(wchar_t ch) {
     bool needs_layout = false;
 
-    auto& block = text_[cursor_.block];
+    auto& block = cursor_.current_block();
     if (ch == '\n') {
       // new line.
-      if (block.text.size() >= TextBlock::max_size) {
+      if (cursor_.block_len() >= TextBlock::max_size) {
         // start a new block.
-        text_.emplace_back();
-        ++cursor_.block;
-        cursor_.offset = 0;
-        layout(text_[cursor_.block]);
+        cursor_.new_block();
+        layout(cursor_.current_block());
       } else {
         // new line goes in existing block.
-        block.text.append(1, ch);
-        ++cursor_.offset;
+        cursor_.append_char(ch);
         needs_layout = true;
       }
     } else if (ch == 0x08) {
       // deletion of one character.
-      if (!block.text.empty()) {
-        // remove one letter.
-        block.text.resize(block.text.size() -1);
-        --cursor_.offset;
-        needs_layout = true;
-      } else {
-        // block is empty.
-        if (cursor_.block == 0) {
-          // $$ flash or beep here.
-          return;
-        }
-        // not the first block, it can be deleted.
-        auto it = begin(text_) + cursor_.block;
-        text_.erase(it);
-        --cursor_.block;
-        cursor_.offset = plx::To<uint32_t>(text_[cursor_.block].text.size());
-      }
+      cursor_.remove_char();
+      needs_layout = true;
     } else {
       // add a character in the current block.
-      block.text.append(1, ch);
-      ++cursor_.offset;
+      cursor_.append_char(ch);
       needs_layout = true;
     }
 
@@ -485,7 +530,7 @@ public:
       auto v_min = scroll_v_;
       auto v_max = scroll_v_ + static_cast<float>(height_);
 
-      size_t block_number = 0;
+      uint32_t block_number = 0;
       for (auto& tb : text_) {
         tb.metrics.top = bottom;
         bottom += tb.metrics.height;
@@ -503,12 +548,13 @@ public:
                             tb.metrics.width + margin_tl_.x, tb.metrics.height + margin_tl_.y);
             dc->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f);
           }
-          if (cursor_.block == block_number) {
+          if (cursor_.block_number() == block_number) {
             // draw caret since it is visible.
             dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
             DWRITE_HIT_TEST_METRICS hit_metrics;
             float x, y;
-            auto hr = tb.layout->HitTestTextPosition(cursor_.offset, FALSE, &x, &y, &hit_metrics);
+            auto hr = tb.layout->HitTestTextPosition(
+                cursor_.current_offset(), FALSE, &x, &y, &hit_metrics);
             if (hr != S_OK)
               throw plx::ComException(__LINE__, hr);
             x += margin_tl_.x;
