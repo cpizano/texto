@@ -313,9 +313,31 @@ public:
 
   LRESULT keydown_handler(int vkey) {
     if (vkey == VK_LEFT) {
+      if (cursor_.offset > 0) {
+        --cursor_.offset;
+      } else if (cursor_.block > 0) {
+        --cursor_.block;
+        cursor_.offset = plx::To<uint32_t>(text_[cursor_.block].text.size());
+      } else {
+        // $$ maybe just flash? read from config?
+        ::Beep(440, 10);
+        return 0L;
+      }
     }
     if (vkey == VK_RIGHT) {
+      if (cursor_.offset < text_[cursor_.block].text.size()) {
+        ++cursor_.offset;
+      } else if (cursor_.block < (text_.size() - 1)) {
+        ++cursor_.block;
+        cursor_.offset = 0;
+      } else {
+        // $$ maybe just flash? read from config?
+        ::Beep(340, 10);
+        return 0L;
+      }
     }
+
+    update_screen();
     return 0L;
   }
     
