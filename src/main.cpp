@@ -278,23 +278,11 @@ public:
         paint_handler();
         break;
       }
-#if 0
-      case WM_WINDOWPOSCHANGING: {
-        // send to fixed size windows when there is a device loss. do nothing
-        // to prevent the default window proc from resizing to 640x400.
-        return 0;
-      }
-#endif
       case WM_KEYDOWN: {
-        if (wparam == VK_DOWN) {
-        }
-        if (wparam == VK_UP) {
-        }
-        return 0L;
+        return keydown_handler(static_cast<int>(wparam));
       }
       case WM_CHAR: {
-        new_char_handler(static_cast<wchar_t>(wparam));
-        return 0L;
+        return char_handler(static_cast<wchar_t>(wparam));
       }
       case WM_COMMAND: {
         return ui_command_handler(LOWORD(wparam));
@@ -323,11 +311,20 @@ public:
     // just recovery here when using direct composition.
   }
 
-  void new_char_handler(wchar_t code) {
+  LRESULT keydown_handler(int vkey) {
+    if (vkey == VK_LEFT) {
+    }
+    if (vkey == VK_RIGHT) {
+    }
+    return 0L;
+  }
+    
+  LRESULT char_handler(wchar_t code) {
     if (code == 0x0D)
       add_character('\n');
     else
       add_character(code);
+    return 0L;
   }
 
   LRESULT left_mouse_button_handler(bool down, POINTS pts) {
@@ -341,18 +338,18 @@ public:
     } else {
 
     }
-    return 0;
+    return 0L;
   }
 
   LRESULT mouse_move_handler(UINT_PTR state, POINTS pts) {
-    return 0;
+    return 0L;
   }
 
   LRESULT mouse_wheel_handler(int16_t offset, int16_t vkey) {
     // $$ read the divisor from the config file.
-    scroll_v_ += offset / 4;
+    scroll_v_ -= offset / 4;
     update_screen();
-    return 0;
+    return 0L;
   }
 
   LRESULT dpi_changed_handler(LPARAM lparam) {
@@ -369,7 +366,7 @@ public:
     ::SetWindowPos(window_, nullptr, suggested->left, suggested->top,
                    r.width(), r.height(),
                    SWP_NOACTIVATE | SWP_NOZORDER);
-    return 0;
+    return 0L;
   }
 
   LRESULT ui_command_handler(int command_id) {
@@ -384,7 +381,7 @@ public:
       layout_all();
     }
     update_screen();
-    return 0;
+    return 0L;
   }
 
   void add_character(wchar_t ch) {
