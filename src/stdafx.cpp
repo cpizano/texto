@@ -116,6 +116,14 @@ ItRange<const uint8_t*> RangeFromBytes(const void* start, size_t count) {
   auto s = reinterpret_cast<const uint8_t*>(start);
   return ItRange<const uint8_t*>(s, s + count);
 }
+ItRange<const uint8_t*> RangeFromString(const std::string& str) {
+  auto s = reinterpret_cast<const uint8_t*>(str.c_str());
+  return ItRange<const uint8_t*>(s, s + str.size());
+}
+ItRange<const uint16_t*> RangeFromString(const std::wstring& str) {
+  auto s = reinterpret_cast<const uint16_t*>(str.c_str());
+  return ItRange<const uint16_t*>(s, s + str.size());
+}
 plx::FilePath GetAppDataPath(bool roaming) {
   auto folder = roaming? FOLDERID_RoamingAppData : FOLDERID_LocalAppData;
   wchar_t* path = nullptr;
@@ -365,5 +373,34 @@ plx::JsonValue JsonFromFile(plx::File& cfile) {
   plx::Range<const char> json(reinterpret_cast<char*>(r.start()),
                               reinterpret_cast<char*>(r.end()));
   return plx::ParseJsonValue(json);
+}
+std::string UTF8FromUTF16(const plx::Range<const uint16_t>& utf16) {
+  if (utf16.empty())
+      return std::string();
+  // compute length.
+  const int utf8_len = ::WideCharToMultiByte(
+      CP_UTF8, 0,
+      reinterpret_cast<const wchar_t*>(utf16.start()),
+      plx::To<int>(utf16.size()),
+      NULL,
+      0,
+      NULL, NULL);
+  if (utf8_len == 0) {
+    throw plx::CodecException(__LINE__, nullptr);
+  }
+
+  std::string utf8;
+  utf8.resize(utf8_len);
+  // now do the conversion.
+  if (!::WideCharToMultiByte(
+      CP_UTF8, 0,
+      reinterpret_cast<const wchar_t*>(utf16.start()),
+      plx::To<int>(utf16.size()),
+      &utf8[0],
+      utf8_len,
+      NULL, NULL)) {
+    throw plx::CodecException(__LINE__, nullptr);
+  }
+  return utf8;
 }
 }

@@ -227,17 +227,22 @@ public:
   }
 
   void save(std::vector<TextBlock>& text) {
-    std::vector<wchar_t> content;
+    std::wstring content;
     for (auto& block : text) {
-      content.insert(end(content), begin(block.text), end(block.text));
-      content.emplace_back(L'\n');
+      content.append(block.text);
+      content.append(1, L'\n');
       if (content.size() > (32 * 1024)) {
-        file_.write(plx::RangeFromVector(content).const_bytes());
+        block_to_disk(plx::RangeFromString(content));
         content.clear();
       }
     }
     if (!content.empty())
-      file_.write(plx::RangeFromVector(content).const_bytes());
+      block_to_disk(plx::RangeFromString(content));
+  }
+
+  void block_to_disk(plx::Range<const uint16_t>& block) {
+    auto utf8 = plx::UTF8FromUTF16(block);
+    file_.write(plx::RangeFromString(utf8));
   }
 };
 
