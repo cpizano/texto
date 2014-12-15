@@ -121,13 +121,6 @@ plx::ComPtr<IDWriteTextLayout> CreateDWTextLayout(
   return layout;
 }
 
-enum Brushes {
-  brush_black,
-  brush_red,
-  brush_text,
-  brush_last
-};
-
 struct TextBlock {
   static const size_t max_size = 100;
 
@@ -222,6 +215,32 @@ public:
 
 };
 
+class PlainTextFileIO {
+  plx::File file_;
+
+public:
+  PlainTextFileIO(plx::FilePath& path) 
+      : file_(plx::File::Create(
+            path, 
+            plx::FileParams::ReadWrite_SharedRead(CREATE_ALWAYS),
+            plx::FileSecurity())) {
+  }
+
+  void save(std::vector<TextBlock>& text) {
+    std::vector<wchar_t> content;
+    for (auto& block : text) {
+      content.insert(end(content), begin(block.text), end(block.text));
+      content.emplace_back(L'\n');
+      if (content.size() > (32 * 1024)) {
+        file_.write(plx::RangeFromVector(content).const_bytes());
+        content.clear();
+      }
+    }
+    if (!content.empty())
+      file_.write(plx::RangeFromVector(content).const_bytes());
+  }
+};
+
 enum FlagOptions {
   debug_text_boxes,
   opacity_50_percent,
@@ -256,6 +275,13 @@ class DCoWindow : public plx::Window <DCoWindow> {
 
   plx::ComPtr<IDWriteFactory> dwrite_factory_;
   plx::ComPtr<IDWriteTextFormat> text_fmt_[2];
+
+  enum Brushes {
+    brush_black,
+    brush_red,
+    brush_text,
+    brush_last
+  };
 
   plx::ComPtr<ID2D1SolidColorBrush> brushes_[brush_last];
 
@@ -314,7 +340,7 @@ public:
         DWRITE_FONT_STRETCH_NORMAL, 20.0f);
     text_fmt_[1] = CreateDWriteTextFormat(
         dwrite_factory_, L"Consolas", DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL, 16.0f);
+        DWRITE_FONT_STRETCH_NORMAL, 14.0f);
 
     {
       ScopedDraw sd(root_surface_, dpi_);
@@ -468,6 +494,11 @@ public:
       flag_options_[alternate_font].flip();
       layout_all();
     }
+    if (command_id == IDC_SAVE_PLAINTEXT) {
+      PlainTextFileIO ptfio(plx::FilePath(L"c:\\test\\texto_file.txt"));
+      ptfio.save(text_);
+    }
+
     update_screen();
     return 0L;
   }
@@ -577,6 +608,7 @@ public:
 HACCEL LoadAccelerators() {
   // $$ read this from the config file.
   ACCEL accelerators[] = {
+    {FVIRTKEY, VK_F1, IDC_SAVE_PLAINTEXT},
     {FVIRTKEY, VK_F10, IDC_DBG_TEXT_BOXES},
     {FVIRTKEY, VK_F11, IDC_50P_TRANSPARENT},
     {FVIRTKEY, VK_F9, IDC_ALT_FONT}
