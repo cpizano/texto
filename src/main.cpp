@@ -109,11 +109,19 @@ struct TextBlock {
   static const size_t target_size = 512;
 
   std::shared_ptr<std::wstring> text;
-  DWRITE_TEXT_METRICS metrics;
   plx::ComPtr<IDWriteTextLayout> layout;
+  DWRITE_TEXT_METRICS metrics;
 
-  TextBlock() : text(std::make_shared<std::wstring>()) {}
-  TextBlock(const std::wstring& txt) : text(std::make_shared<std::wstring>(txt)) {}
+  TextBlock() : text(std::make_shared<std::wstring>()) {
+    set_needs_layout();
+  }
+
+  TextBlock(const std::wstring& txt) : text(std::make_shared<std::wstring>(txt)) {
+    set_needs_layout();
+  }
+
+  bool needs_layout() const { return metrics.lineCount == -1; }
+  void set_needs_layout() { metrics.lineCount = -1; }
 };
 
 class Cursor {
@@ -533,9 +541,9 @@ public:
       ptfio.save(text_);
     }
     if (command_id == IDC_LOAD_PLAINTEXT) {
+      text_.clear();
       PlainTextFileIO ptfio(plx::FilePath(L"c:\\test\\texto_file_in.txt"));
       ptfio.load(text_);
-      layout_all();
     }
 
     update_screen();
@@ -587,7 +595,7 @@ public:
 
   void layout_all() {
     for (auto& tb : text_) {
-      layout(tb);
+      tb.set_needs_layout();
     }
   }
 
@@ -603,13 +611,19 @@ public:
       auto v_max = scroll_v_ + static_cast<float>(height_);
 
       uint32_t block_number = 0;
+      bool painting = false;
+
       for (auto& tb : text_) {
+        if (tb.needs_layout())
+          layout(tb);
+
         tb.metrics.top = bottom;
         bottom += tb.metrics.height;
 
         if (((bottom > v_min) && (bottom < v_max)) || 
             ((tb.metrics.top > v_min) && (tb.metrics.top < v_max)) ||
             ((tb.metrics.top < v_min) && (bottom  > v_max))) {
+          painting = true;
           // in view, paint it.
           dc->SetTransform(D2D1::Matrix3x2F::Translation(0.0f, tb.metrics.top - scroll_v_));
           dc->DrawTextLayout(margin_tl_, tb.layout.Get(), brushes_[brush_text].Get()); 
@@ -636,6 +650,9 @@ public:
                 D2D1::RectF(x, y, x + 2.0f, y + hit_metrics.height),
                 brushes_[brush_red].Get());
           }
+        } else if (painting) {
+          // we went outside of the viewport, no need to do more work right now.
+            break;
         }
         ++block_number;
       }
