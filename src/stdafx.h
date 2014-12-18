@@ -192,6 +192,30 @@ plx::ComPtr<IDCompositionTarget> CreateDCoWindowTarget(
     plx::ComPtr<IDCompositionDesktopDevice> device, HWND window) ;
 
 
+///////////////////////////////////////////////////////////////////////////////
+// plx::RangeException (thrown by ItRange and others)
+//
+class RangeException : public plx::Exception {
+  void* ptr_;
+public:
+  RangeException(int line, void* ptr)
+      : Exception(line, "Invalid Range"), ptr_(ptr) {
+    PostCtor();
+  }
+
+  void* pointer() const {
+    return ptr_;
+  }
+};
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateDWriteFactory : DirectWrite shared factory.
+//
+
+plx::ComPtr<IDWriteFactory> CreateDWriteFactory() ;
+
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // plx::CreateD2D1FactoryST : Direct2D fatory.
@@ -218,23 +242,6 @@ plx::ComPtr<ID3D11Device> CreateDeviceD3D11(int extra_flags) ;
 plx::ComPtr<ID2D1DeviceContext> CreateDCoDeviceCtx(
     plx::ComPtr<IDCompositionSurface> surface,
     const plx::DPI& dpi, const D2D1_SIZE_F& extra_offset) ;
-
-
-///////////////////////////////////////////////////////////////////////////////
-// plx::RangeException (thrown by ItRange and others)
-//
-class RangeException : public plx::Exception {
-  void* ptr_;
-public:
-  RangeException(int line, void* ptr)
-      : Exception(line, "Invalid Range"), ptr_(ptr) {
-    PostCtor();
-  }
-
-  void* pointer() const {
-    return ptr_;
-  }
-};
 
 
 
@@ -456,6 +463,13 @@ std::unique_ptr<U[]> HeapRange(ItRange<U*>&r) {
 
 
 ///////////////////////////////////////////////////////////////////////////////
+// plx::Range  (alias for ItRange<T*>)
+//
+template <typename T>
+using Range = plx::ItRange<T*>;
+
+
+///////////////////////////////////////////////////////////////////////////////
 // plx::IOException
 // error_code_ : The win32 error code of the last operation.
 // name_ : The file or pipe in question.
@@ -598,10 +612,7 @@ char* HexASCII(uint8_t byte, char* out) ;
 
 
 ///////////////////////////////////////////////////////////////////////////////
-// plx::Range  (alias for ItRange<T*>)
-//
-template <typename T>
-using Range = plx::ItRange<T*>;
+std::string HexASCIIStr(const plx::Range<const uint8_t>& r, char separator) ;
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -823,7 +834,25 @@ public:
 
 
 ///////////////////////////////////////////////////////////////////////////////
-std::string HexASCIIStr(const plx::Range<const uint8_t>& r, char separator) ;
+// plx::CodecException (thrown by some decoders)
+// bytes_ : The 16 bytes or less that caused the issue.
+//
+class CodecException : public plx::Exception {
+  uint8_t bytes_[16];
+  size_t count_;
+
+public:
+  CodecException(int line, const plx::Range<const unsigned char>* br)
+      : Exception(line, "Codec exception"), count_(0) {
+    if (br)
+      count_ = br->CopyToArray(bytes_);
+    PostCtor();
+  }
+
+  std::string bytes() const {
+    return plx::HexASCIIStr(plx::Range<const uint8_t>(bytes_, count_), ',');
+  }
+};
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1212,34 +1241,6 @@ To(const Src & value) {
 
 
 ///////////////////////////////////////////////////////////////////////////////
-// plx::CodecException (thrown by some decoders)
-// bytes_ : The 16 bytes or less that caused the issue.
-//
-class CodecException : public plx::Exception {
-  uint8_t bytes_[16];
-  size_t count_;
-
-public:
-  CodecException(int line, const plx::Range<const unsigned char>* br)
-      : Exception(line, "Codec exception"), count_(0) {
-    if (br)
-      count_ = br->CopyToArray(bytes_);
-    PostCtor();
-  }
-
-  std::string bytes() const {
-    return plx::HexASCIIStr(plx::Range<const uint8_t>(bytes_, count_), ',');
-  }
-};
-
-
-///////////////////////////////////////////////////////////////////////////////
-// plx::DecodeString (decodes a json-style encoded string)
-//
-std::string DecodeString(plx::Range<const char>& range) ;
-
-
-///////////////////////////////////////////////////////////////////////////////
 // SkipWhitespace (advances a range as long isspace() is false.
 //
 template <typename T>
@@ -1255,6 +1256,21 @@ SkipWhitespace(const plx::Range<T>& r) {
   }
   return wr;
 }
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateDWTextLayout : DirectWrite text layout object.
+//
+
+plx::ComPtr<IDWriteTextLayout> CreateDWTextLayout(
+  plx::ComPtr<IDWriteFactory> dw_factory, plx::ComPtr<IDWriteTextFormat> format,
+  const plx::Range<const wchar_t>& text, const D2D1_SIZE_F& size) ;
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::DecodeString (decodes a json-style encoded string)
+//
+std::string DecodeString(plx::Range<const char>& range) ;
 
 
 ///////////////////////////////////////////////////////////////////////////////

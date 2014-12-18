@@ -1,6 +1,12 @@
 #include "stdafx.h"
 #include "resource.h"
 
+// Ideas
+// 1. Modified text (like VS ide) side column marker
+// 2. Column guides (80 cols, etc)
+// 3. Dropbox folder aware
+//
+
 namespace ui_txt {
   const wchar_t gretting[] = L"Welcome to the TExTO editor\n"
                              L"      by AlienRancher      \n"
@@ -83,22 +89,12 @@ plx::ComPtr<ID2D1Geometry> CreateD2D1Geometry(
   return geometry;
 }
 
-plx::ComPtr<IDWriteFactory> CreateDWriteFactory() {
-  plx::ComPtr<IDWriteFactory> factory;
-  auto hr = ::DWriteCreateFactory(
-      DWRITE_FACTORY_TYPE_SHARED,
-      __uuidof(IDWriteFactory),
-      reinterpret_cast<IUnknown**>(factory.GetAddressOf()));
-  if (hr != S_OK)
-    throw plx::ComException(__LINE__, hr);
-  return factory;
-}
-
 plx::ComPtr<IDWriteTextFormat> CreateDWriteTextFormat(
     plx::ComPtr<IDWriteFactory> dw_factory,
-    const wchar_t* font_family,
-    DWRITE_FONT_WEIGHT weight, DWRITE_FONT_STYLE style,
-    DWRITE_FONT_STRETCH stretch, float size) {
+    const wchar_t* font_family, float size,
+    DWRITE_FONT_WEIGHT weight = DWRITE_FONT_WEIGHT_NORMAL,
+    DWRITE_FONT_STYLE style = DWRITE_FONT_STYLE_NORMAL,
+    DWRITE_FONT_STRETCH stretch = DWRITE_FONT_STRETCH_NORMAL) {
   plx::ComPtr<IDWriteTextFormat> format;
   auto hr = dw_factory->CreateTextFormat(
       font_family, nullptr, weight, style, stretch, size, L"", format.GetAddressOf());
@@ -107,19 +103,7 @@ plx::ComPtr<IDWriteTextFormat> CreateDWriteTextFormat(
   return format;
 }
 
-plx::ComPtr<IDWriteTextLayout> CreateDWTextLayout(
-  plx::ComPtr<IDWriteFactory> dw_factory, plx::ComPtr<IDWriteTextFormat> format,
-  const plx::Range<const wchar_t>& text, const D2D1_SIZE_F& size) {
-  plx::ComPtr<IDWriteTextLayout> layout;
-  auto hr = dw_factory->CreateTextLayout(
-      text.start(), plx::To<UINT32>(text.size()),
-      format.Get(),
-      size.width, size.height,
-      layout.GetAddressOf());
-  if (hr != S_OK)
-    throw plx::ComException(__LINE__, hr);
-  return layout;
-}
+#pragma region text_management
 
 struct TextBlock {
   static const size_t max_size = 100;
@@ -215,6 +199,8 @@ public:
 
 };
 
+#pragma endregion
+
 class PlainTextFileIO {
   plx::File file_;
 
@@ -252,6 +238,8 @@ enum FlagOptions {
   alternate_font,
   flag_op_last
 };
+
+#pragma region window
 
 class DCoWindow : public plx::Window <DCoWindow> {
   // width and height are in logical pixels.
@@ -297,9 +285,6 @@ public:
     margin_tl_ = D2D1::Point2F(12.0f, 36.0f);
     margin_br_ = D2D1::Point2F(6.0f, 16.0f);
 
-    // init the text system.
-
-
     // create the window.
     create_window(WS_EX_NOREDIRECTIONBITMAP,
                   WS_POPUP | WS_VISIBLE,
@@ -339,13 +324,9 @@ public:
         d2d_factory_,
         D2D1::Ellipse(D2D1::Point2F(width_ - 18.0f , 18.0f), 8.0f, 8.0f));
 
-    dwrite_factory_ = CreateDWriteFactory();
-    text_fmt_[0] = CreateDWriteTextFormat(
-        dwrite_factory_, L"Candara", DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL, 20.0f);
-    text_fmt_[1] = CreateDWriteTextFormat(
-        dwrite_factory_, L"Consolas", DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL, 14.0f);
+    dwrite_factory_ = plx::CreateDWriteFactory();
+    text_fmt_[0] = CreateDWriteTextFormat(dwrite_factory_, L"Candara", 70.0f);
+    text_fmt_[1] = CreateDWriteTextFormat(dwrite_factory_, L"Consolas", 14.0f);
 
     {
       ScopedDraw sd(root_surface_, dpi_);
@@ -360,12 +341,10 @@ public:
           brushes_[brush_text].GetAddressOf());
 
       //// Render start UI ////////////////////////////////////////////////////////////////////
-      auto title_fmt = CreateDWriteTextFormat(
-          dwrite_factory_, L"Candara", DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-          DWRITE_FONT_STRETCH_NORMAL, 24.0f);
+      auto title_fmt = CreateDWriteTextFormat(dwrite_factory_, L"Candara", 24.0f);
       auto txt = plx::RangeFromLitStr(ui_txt::gretting);
       auto size = D2D1::SizeF(static_cast<float>(width_), static_cast<float>(height_));
-      auto greetings = CreateDWTextLayout(dwrite_factory_, title_fmt, txt, size);
+      auto greetings = plx::CreateDWTextLayout(dwrite_factory_, title_fmt, txt, size);
 
       plx::ComPtr<ID2D1SolidColorBrush> brush;
       dc->CreateSolidColorBrush(D2D1::ColorF(RGB(74, 174, 0), 1.0), brush.GetAddressOf());
@@ -544,7 +523,7 @@ public:
         static_cast<float>(height_)- margin_tl_.y - margin_tl_.y);
     plx::Range<const wchar_t> txt(block.text.c_str(), block.text.size());
     auto fmt_index = flag_options_[alternate_font] ? 1 : 0;
-    block.layout = CreateDWTextLayout(dwrite_factory_, text_fmt_[fmt_index], txt, box);
+    block.layout = plx::CreateDWTextLayout(dwrite_factory_, text_fmt_[fmt_index], txt, box);
     auto hr = block.layout->GetMetrics(&block.metrics);
     if (hr != S_OK) {
       __debugbreak();
@@ -609,6 +588,8 @@ public:
   }
 
 };
+
+#pragma endregion
 
 HACCEL LoadAccelerators() {
   // $$ read this from the config file.
