@@ -106,7 +106,7 @@ plx::ComPtr<IDWriteTextFormat> CreateDWriteTextFormat(
 #pragma region text_management
 
 struct TextBlock {
-  static const size_t max_size = 100;
+  static const size_t target_size = 512;
 
   std::shared_ptr<std::wstring> text;
   DWRITE_TEXT_METRICS metrics;
@@ -232,14 +232,14 @@ public:
   }
 
   void load(std::vector<TextBlock>& text) {
-    const size_t chunk_sz = 512;
-
     auto file = plx::File::Create(
         path_, 
         plx::FileParams::ReadWrite_SharedRead(OPEN_EXISTING),
         plx::FileSecurity());
 
-    std::wstring fulltext = file_from_disk(file, io_size);
+    // need to read the whole file at once because the UTF16 conversion fails if
+    // we end up in the middle of multi-byte sequence.
+    std::wstring fulltext = file_from_disk(file);
     size_t brk = 0;
     size_t start = 0;
 
@@ -247,13 +247,16 @@ public:
       brk = fulltext.find_first_of(L'\n', brk);
 
       if (brk == std::wstring::npos) {
-        // $$$ dropping the last block.
+        // last block.
+        text.emplace_back(fulltext.substr(start, brk));
         return;
       }
 
       auto sz = brk - start;
-      if (sz < chunk_sz) {
-        brk += 50;
+      if (sz < TextBlock::target_size) {
+        // current block size is small, advance half the difference.
+        auto offset = TextBlock::target_size - sz;
+        brk += (offset > 20) ? offset / 2 : 10;
         continue;
       }
 
@@ -270,7 +273,7 @@ private:
     file.write(plx::RangeFromString(utf8));
   }
 
-  std::wstring file_from_disk(plx::File& file, size_t read_size) {
+  std::wstring file_from_disk(plx::File& file) {
     auto fsz = file.size_in_bytes();
     plx::Range<uint8_t> block(nullptr, fsz);
     auto heap = plx::HeapRange(block);
@@ -492,7 +495,7 @@ public:
 
   LRESULT mouse_wheel_handler(int16_t offset, int16_t vkey) {
     // $$ read the divisor from the config file.
-    scroll_v_ -= offset / 6;
+    scroll_v_ -= offset / 4;
     update_screen();
     return 0L;
   }
@@ -545,7 +548,7 @@ public:
     auto& block = cursor_.current_block();
     if (ch == '\n') {
       // new line.
-      if (cursor_.block_len() >= TextBlock::max_size) {
+      if (cursor_.block_len() >= TextBlock::target_size) {
         // start a new block.
         cursor_.new_block();
         layout(cursor_.current_block());
