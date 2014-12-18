@@ -113,6 +113,7 @@ struct TextBlock {
   plx::ComPtr<IDWriteTextLayout> layout;
 
   TextBlock() : text(std::make_shared<std::wstring>()) {}
+  TextBlock(const std::wstring& txt) : text(std::make_shared<std::wstring>(txt)) {}
 };
 
 class Cursor {
@@ -230,11 +231,51 @@ public:
       block_to_disk(file, content);
   }
 
+  void load(std::vector<TextBlock>& text) {
+    const size_t chunk_sz = 512;
+
+    auto file = plx::File::Create(
+        path_, 
+        plx::FileParams::ReadWrite_SharedRead(OPEN_EXISTING),
+        plx::FileSecurity());
+
+    std::wstring fulltext = file_from_disk(file, io_size);
+    size_t brk = 0;
+    size_t start = 0;
+
+    while (true) {
+      brk = fulltext.find_first_of(L'\n', brk);
+
+      if (brk == std::wstring::npos) {
+        // $$$ dropping the last block.
+        return;
+      }
+
+      auto sz = brk - start;
+      if (sz < chunk_sz) {
+        brk += 50;
+        continue;
+      }
+
+      text.emplace_back(fulltext.substr(start, brk));
+      start = brk;
+    }
+
+  }
+
 private:
   void block_to_disk(plx::File& file, const std::wstring& str_block) {
     auto block = plx::RangeFromString(str_block);
     auto utf8 = plx::UTF8FromUTF16(block);
     file.write(plx::RangeFromString(utf8));
+  }
+
+  std::wstring file_from_disk(plx::File& file, size_t read_size) {
+    auto fsz = file.size_in_bytes();
+    plx::Range<uint8_t> block(nullptr, fsz);
+    auto heap = plx::HeapRange(block);
+    auto bytes_read = file.read(block);
+    return plx::UTF16FromUTF8(plx::Range<const uint8_t>(block.start(), bytes_read));
   }
 };
 
@@ -451,7 +492,7 @@ public:
 
   LRESULT mouse_wheel_handler(int16_t offset, int16_t vkey) {
     // $$ read the divisor from the config file.
-    scroll_v_ -= offset / 4;
+    scroll_v_ -= offset / 6;
     update_screen();
     return 0L;
   }
@@ -485,8 +526,13 @@ public:
       layout_all();
     }
     if (command_id == IDC_SAVE_PLAINTEXT) {
-      PlainTextFileIO ptfio(plx::FilePath(L"c:\\test\\texto_file.txt"));
+      PlainTextFileIO ptfio(plx::FilePath(L"c:\\test\\texto_file_out.txt"));
       ptfio.save(text_);
+    }
+    if (command_id == IDC_LOAD_PLAINTEXT) {
+      PlainTextFileIO ptfio(plx::FilePath(L"c:\\test\\texto_file_in.txt"));
+      ptfio.load(text_);
+      layout_all();
     }
 
     update_screen();
@@ -601,6 +647,7 @@ HACCEL LoadAccelerators() {
   // $$ read this from the config file.
   ACCEL accelerators[] = {
     {FVIRTKEY, VK_F1, IDC_SAVE_PLAINTEXT},
+    {FVIRTKEY, VK_F2, IDC_LOAD_PLAINTEXT},
     {FVIRTKEY, VK_F10, IDC_DBG_TEXT_BOXES},
     {FVIRTKEY, VK_F11, IDC_50P_TRANSPARENT},
     {FVIRTKEY, VK_F9, IDC_ALT_FONT}

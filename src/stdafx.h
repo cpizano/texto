@@ -1321,6 +1321,11 @@ plx::JsonValue JsonFromFile(plx::File& cfile) ;
 
 
 ///////////////////////////////////////////////////////////////////////////////
+// plx::UTF16FromUTF8
+std::wstring UTF16FromUTF8(const plx::Range<const uint8_t>& utf8) ;
+
+
+///////////////////////////////////////////////////////////////////////////////
 // plx::UTF8FromUTF16
 std::string UTF8FromUTF16(const plx::Range<const uint16_t>& utf16) ;
 
