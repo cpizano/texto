@@ -442,7 +442,11 @@ ItRange<const uint8_t*> RangeFromBytes(const void* start, size_t count) ;
 
 ItRange<const uint8_t*> RangeFromString(const std::string& str) ;
 
+ItRange<uint8_t*> RangeFromString(std::string& str) ;
+
 ItRange<const uint16_t*> RangeFromString(const std::wstring& str) ;
+
+ItRange<uint16_t*> RangeFromString(std::wstring& str) ;
 
 template <typename U>
 std::string StringFromRange(const ItRange<U>& r) {
@@ -807,12 +811,16 @@ public:
     return li.QuadPart;
   }
 
-  size_t read(plx::Range<uint8_t>& mem, unsigned int from) {
+  size_t read(plx::Range<uint8_t>& mem, unsigned int from = -1) {
+    return read(mem.start(), mem.size(), from);
+  }
+
+  size_t read(uint8_t* buf, size_t len, int from) {
     OVERLAPPED ov = {0};
     ov.Offset = from;
     DWORD read = 0;
-    if (!::ReadFile(handle_, mem.start(), static_cast<DWORD>(mem.size()),
-                    &read, &ov))
+    if (!::ReadFile(handle_, buf, static_cast<DWORD>(len),
+                    &read, (from < 0) ? nullptr : &ov))
       return 0;
     return read;
   }

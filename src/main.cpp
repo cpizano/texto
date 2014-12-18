@@ -108,9 +108,11 @@ plx::ComPtr<IDWriteTextFormat> CreateDWriteTextFormat(
 struct TextBlock {
   static const size_t max_size = 100;
 
-  std::wstring text;
+  std::shared_ptr<std::wstring> text;
   DWRITE_TEXT_METRICS metrics;
   plx::ComPtr<IDWriteTextLayout> layout;
+
+  TextBlock() : text(std::make_shared<std::wstring>()) {}
 };
 
 class Cursor {
@@ -125,7 +127,7 @@ public:
   }
 
   uint32_t block_len() const {
-    return plx::To<uint32_t>(current_block().text.size());
+    return plx::To<uint32_t>(current_block().text->size());
   }
 
   uint32_t current_offset() const {
@@ -175,7 +177,7 @@ public:
   }
 
   void insert_char(wchar_t ch) {
-    current_block().text.insert(offset_, 1, ch);
+    current_block().text->insert(offset_, 1, ch);
     ++offset_;
   }
 
@@ -184,8 +186,8 @@ public:
     if (offset_ == 0)
       return false;   // $$$ handle erasure here.
 
-    if (!txt.empty()) {
-      txt.erase(--offset_, 1);
+    if (!txt->empty()) {
+      txt->erase(--offset_, 1);
     } else if (block_ != 0) {
       auto it = begin(text_) + block_;
       text_.erase(it);
@@ -202,33 +204,37 @@ public:
 #pragma endregion
 
 class PlainTextFileIO {
-  plx::File file_;
+  const plx::FilePath path_;
+  const size_t io_size = 32 * 1024;
 
 public:
-  PlainTextFileIO(plx::FilePath& path) 
-      : file_(plx::File::Create(
-            path, 
-            plx::FileParams::ReadWrite_SharedRead(CREATE_ALWAYS),
-            plx::FileSecurity())) {
+  PlainTextFileIO(plx::FilePath& path) : path_(path) {
   }
 
   void save(std::vector<TextBlock>& text) {
+    auto file = plx::File::Create(
+        path_, 
+        plx::FileParams::ReadWrite_SharedRead(CREATE_ALWAYS),
+        plx::FileSecurity());
+
     std::wstring content;
     for (auto& block : text) {
-      content.append(block.text);
+      content.append(*block.text);
       content.append(1, L'\n');
-      if (content.size() > (32 * 1024)) {
-        block_to_disk(plx::RangeFromString(content));
+      if (content.size() > io_size) {
+        block_to_disk(file, content);
         content.clear();
       }
     }
     if (!content.empty())
-      block_to_disk(plx::RangeFromString(content));
+      block_to_disk(file, content);
   }
 
-  void block_to_disk(plx::Range<const uint16_t>& block) {
+private:
+  void block_to_disk(plx::File& file, const std::wstring& str_block) {
+    auto block = plx::RangeFromString(str_block);
     auto utf8 = plx::UTF8FromUTF16(block);
-    file_.write(plx::RangeFromString(utf8));
+    file.write(plx::RangeFromString(utf8));
   }
 };
 
@@ -325,7 +331,7 @@ public:
         D2D1::Ellipse(D2D1::Point2F(width_ - 18.0f , 18.0f), 8.0f, 8.0f));
 
     dwrite_factory_ = plx::CreateDWriteFactory();
-    text_fmt_[0] = CreateDWriteTextFormat(dwrite_factory_, L"Candara", 70.0f);
+    text_fmt_[0] = CreateDWriteTextFormat(dwrite_factory_, L"Candara", 20.0f);
     text_fmt_[1] = CreateDWriteTextFormat(dwrite_factory_, L"Consolas", 14.0f);
 
     {
@@ -341,7 +347,7 @@ public:
           brushes_[brush_text].GetAddressOf());
 
       //// Render start UI ////////////////////////////////////////////////////////////////////
-      auto title_fmt = CreateDWriteTextFormat(dwrite_factory_, L"Candara", 24.0f);
+      auto title_fmt = CreateDWriteTextFormat(dwrite_factory_, L"Candara", 34.0f);
       auto txt = plx::RangeFromLitStr(ui_txt::gretting);
       auto size = D2D1::SizeF(static_cast<float>(width_), static_cast<float>(height_));
       auto greetings = plx::CreateDWTextLayout(dwrite_factory_, title_fmt, txt, size);
@@ -521,7 +527,7 @@ public:
     auto box = D2D1::SizeF(
         static_cast<float>(width_) - margin_tl_.x - margin_br_.x,
         static_cast<float>(height_)- margin_tl_.y - margin_tl_.y);
-    plx::Range<const wchar_t> txt(block.text.c_str(), block.text.size());
+    plx::Range<const wchar_t> txt(block.text->c_str(), block.text->size());
     auto fmt_index = flag_options_[alternate_font] ? 1 : 0;
     block.layout = plx::CreateDWTextLayout(dwrite_factory_, text_fmt_[fmt_index], txt, box);
     auto hr = block.layout->GetMetrics(&block.metrics);
