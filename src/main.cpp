@@ -605,7 +605,8 @@ public:
         bottom += tb.metrics.height;
 
         if (((bottom > v_min) && (bottom < v_max)) || 
-            ((tb.metrics.top > v_min) && (tb.metrics.top < v_max))) {
+            ((tb.metrics.top > v_min) && (tb.metrics.top < v_max)) ||
+            ((tb.metrics.top < v_min) && (bottom  > v_max))) {
           // in view, paint it.
           dc->SetTransform(D2D1::Matrix3x2F::Translation(0.0f, tb.metrics.top - scroll_v_));
           dc->DrawTextLayout(margin_tl_, tb.layout.Get(), brushes_[brush_text].Get()); 
