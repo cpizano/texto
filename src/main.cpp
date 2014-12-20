@@ -248,6 +248,7 @@ public:
     // need to read the whole file at once because the UTF16 conversion fails if
     // we end up in the middle of multi-byte sequence.
     std::wstring fulltext = file_from_disk(file);
+
     size_t brk = 0;
     size_t start = 0;
 
@@ -268,8 +269,9 @@ public:
         continue;
       }
 
-      text.emplace_back(fulltext.substr(start, brk));
-      start = brk;
+      text.emplace_back(fulltext.substr(start, sz - 1));
+      start = brk + 1;
+      ++brk;
     }
 
   }
