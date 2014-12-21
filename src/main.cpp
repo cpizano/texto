@@ -155,7 +155,7 @@ public:
     desired_col_ = 0;
     if (offset_ > 0) {
       --offset_;
-    } else if (block_ > 0) {
+    } else if (!is_first_block()) {
       --block_;
       offset_ = block_len();
     } else {
@@ -168,7 +168,7 @@ public:
     desired_col_ = 0;
     if (offset_ < block_len()) {
       ++offset_;
-    } else if (block_ < (text_.size() - 1)) {
+    } else if (!is_last_block()) {
       ++block_;
       offset_ = 0;
     } else {
@@ -178,11 +178,11 @@ public:
   }
 
   bool move_down() {
-    return CalcOffset(false);
+    return vertical_move(false);
   }
 
   bool move_up() {
-    return CalcOffset(true);
+    return vertical_move(true);
   }
 
   TextBlock& current_block() {
@@ -222,8 +222,16 @@ public:
     return true;
   }
 
+  bool is_last_block() const {
+    return block_ >= (text_.size() - 1);
+  }
+
+  bool is_first_block() const {
+    return block_ <= 0;
+  }
+
 private:
-  bool CalcOffset(bool up_or_down) {
+  bool vertical_move(bool up_or_down) {
     std::vector<DWRITE_LINE_METRICS> line_metrics;
     auto& cb = current_block();
     if (cb.metrics.lineCount == -1)
@@ -233,6 +241,9 @@ private:
     uint32_t actual_line_count;
     auto hr = cb.layout->GetLineMetrics(
         &line_metrics.front(), cb.metrics.lineCount, &actual_line_count);
+
+    if (actual_line_count == 0)
+      return false;
 
     uint32_t acc = 0;
     size_t line_no = 0;
@@ -246,16 +257,24 @@ private:
       ++line_no;
     }
 
-    if (!line_len)
-      __debugbreak();
+    if (!line_len) {
+      if (acc == offset_)
+        --line_no;
+      else
+        __debugbreak();
+    }
 
     auto line_offset = desired_col_ ? desired_col_ : offset_ - acc;
 
     if (!up_or_down) {
-      // going down.
+      // going down =============================================
       if ((line_no + 1) == cb.metrics.lineCount) {
         // end of the block. Move to next block.
         // $$ this is mostly wrong.
+        if (is_last_block()) {
+          offset_ = line_len;
+          return false;
+        }
         ++block_;
         offset_ = line_offset;
         return true;
@@ -270,9 +289,17 @@ private:
 
       offset_ = (acc + line_len) + line_offset;
     } else {
-      // going up.
-      if (line_no == 0)
+      // going up ================================================
+      if (line_no == 0) {
+        // end of the block. Move to previous block.
+        if (is_first_block()) {
+          offset_ = 0;
+          return false;
+        }
+        --block_;
+        offset_ = 0;
         return true;
+      }
 
       auto& prev_metrics = line_metrics[line_no - 1];
       if (prev_metrics.length < line_offset) {
@@ -560,6 +587,7 @@ public:
       cursor_.move_down();
     }
 
+    ensure_cursor_in_view();
     update_screen();
     return 0L;
   }
@@ -686,6 +714,28 @@ public:
     for (auto& tb : text_) {
       tb.set_needs_layout();
     }
+  }
+
+  void ensure_cursor_in_view() {
+    auto& cb = cursor_.current_block();
+    if (cb.needs_layout())
+      return;
+
+    DWRITE_HIT_TEST_METRICS hit_metrics;
+    float x, y;
+    auto hr = cb.layout->HitTestTextPosition(
+        cursor_.current_offset(), FALSE, &x, &y, &hit_metrics);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+
+    y += cb.metrics.top;
+    auto actual_y = margin_tl_.y + y - scroll_v_;
+
+    if (actual_y > (height_ - margin_br_.y))
+      scroll_v_ = y - height_ + margin_tl_.y + margin_br_.y;
+
+    if (actual_y < margin_tl_.y)
+      scroll_v_ = y; 
   }
 
   void update_screen() {
