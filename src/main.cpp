@@ -444,7 +444,8 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<IDCompositionVisual2> root_visual_;
   plx::ComPtr<IDCompositionSurface> root_surface_;
 
-  plx::ComPtr<ID2D1Geometry> circle_geom_;
+  plx::ComPtr<ID2D1Geometry> circle_geom_move_;
+  plx::ComPtr<ID2D1Geometry> circle_geom_close_;
 
   plx::ComPtr<IDWriteFactory> dwrite_factory_;
   plx::ComPtr<IDWriteTextFormat> text_fmt_[2];
@@ -452,6 +453,7 @@ class DCoWindow : public plx::Window <DCoWindow> {
   enum Brushes {
     brush_black,
     brush_red,
+    brush_blue,
     brush_text,
     brush_last
   };
@@ -500,7 +502,11 @@ public:
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
 
-    circle_geom_ = CreateD2D1Geometry(
+    circle_geom_move_ = CreateD2D1Geometry(
+        d2d_factory_,
+        D2D1::Ellipse(D2D1::Point2F(width_ - (18.0f + 22.0f) , 18.0f), 8.0f, 8.0f));
+
+   circle_geom_close_ = CreateD2D1Geometry(
         d2d_factory_,
         D2D1::Ellipse(D2D1::Point2F(width_ - 18.0f , 18.0f), 8.0f, 8.0f));
 
@@ -517,6 +523,8 @@ public:
           brushes_[brush_black].GetAddressOf());
       dc->CreateSolidColorBrush(D2D1::ColorF(0xE90000, 1.0f), 
           brushes_[brush_red].GetAddressOf());
+      dc->CreateSolidColorBrush(D2D1::ColorF(0x1E5D81, 1.0f), 
+          brushes_[brush_blue].GetAddressOf());
       dc->CreateSolidColorBrush(D2D1::ColorF(RGB(57, 135, 214), 1.0f), 
           brushes_[brush_text].GetAddressOf());
 
@@ -614,15 +622,19 @@ public:
   }
 
   LRESULT left_mouse_button_handler(bool down, POINTS pts) {
+    BOOL hit = 0;
     if (down) {
-      BOOL hit = 0;
-      circle_geom_->FillContainsPoint(
+      circle_geom_move_->FillContainsPoint(
           D2D1::Point2F(pts.x, pts.y), D2D1::Matrix3x2F::Identity(), &hit);
       if (hit != 0) {
         ::SendMessageW(window(), WM_SYSCOMMAND, SC_MOVE|0x0002, 0);
       }
     } else {
-
+      circle_geom_close_->FillContainsPoint(
+          D2D1::Point2F(pts.x, pts.y), D2D1::Matrix3x2F::Identity(), &hit);
+      if (hit != 0) {
+        ::PostQuitMessage(0);
+      }
     }
     return 0L;
   }
@@ -756,7 +768,8 @@ public:
       ScopedDraw sd(root_surface_, dpi_);
       auto bk_alpha = flag_options_[opacity_50_percent] ? 0.5f : 0.9f;
       auto dc = sd.begin(D2D1::ColorF(0x000000, bk_alpha), zero_offset);
-      dc->DrawGeometry(circle_geom_.Get(), brushes_[brush_red].Get());
+      dc->DrawGeometry(circle_geom_move_.Get(), brushes_[brush_blue].Get(), 4.0f);
+      dc->DrawGeometry(circle_geom_close_.Get(), brushes_[brush_red].Get(), 4.0f);
 
       float bottom = 0.0f;
       auto v_min = scroll_v_;
