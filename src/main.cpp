@@ -238,20 +238,18 @@ private:
     size_t line_no = 0;
     uint32_t line_len = 0;
     for (auto& lm : line_metrics) {
-      acc += lm.length;
-      if (acc > offset_) {
+      if ((acc + lm.length) > offset_) {
         line_len = lm.length;
         break;
       }
+      acc += lm.length;
       ++line_no;
     }
 
     if (!line_len)
       __debugbreak();
 
-    auto line_offset = desired_col_ ?
-        desired_col_ :
-        offset_ - (acc - line_len);
+    auto line_offset = desired_col_ ? desired_col_ : offset_ - acc;
 
     if (!up_or_down) {
       // going down.
@@ -270,20 +268,20 @@ private:
         line_offset = next_metrics.length - next_metrics.newlineLength;
       }
 
-      offset_ = acc + line_offset;
+      offset_ = (acc + line_len) + line_offset;
     } else {
       // going up.
       if (line_no == 0)
         return true;
 
-      auto& next_metrics = line_metrics[line_no - 1];
-      if (next_metrics.length < line_offset) {
+      auto& prev_metrics = line_metrics[line_no - 1];
+      if (prev_metrics.length < line_offset) {
         // prev line is shorter, emember the column so we can try again.
         desired_col_ = line_offset;
-        line_offset = next_metrics.length - next_metrics.newlineLength;
+        line_offset = prev_metrics.length - prev_metrics.newlineLength;
       }
 
-      offset_ = (acc -line_len) - next_metrics.length + line_offset;
+      offset_ = (acc - prev_metrics.length) + line_offset;
     }
 
     return true;
