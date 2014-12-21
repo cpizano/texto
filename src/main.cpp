@@ -5,6 +5,8 @@
 // 1. Modified text (like VS ide) side column marker
 // 2. Column guides (80 cols, etc)
 // 3. Dropbox folder aware
+// 4. Number of lines
+// 5. darken the entire line of the cursor
 //
 
 namespace ui_txt {
@@ -127,11 +129,13 @@ struct TextBlock {
 class Cursor {
   uint32_t block_;
   uint32_t offset_;
+  uint32_t desired_col_;
   std::vector<TextBlock>& text_;
 
 public:
   Cursor(std::vector<TextBlock>& text) 
-      : text_(text), block_(0), offset_(0) {
+      : block_(0), offset_(0), desired_col_(0),
+        text_(text) {
     text_.resize(1);
   }
 
@@ -148,6 +152,7 @@ public:
   }
 
   bool move_left() {
+    desired_col_ = 0;
     if (offset_ > 0) {
       --offset_;
     } else if (block_ > 0) {
@@ -160,6 +165,7 @@ public:
   }
 
   bool move_right() {
+    desired_col_ = 0;
     if (offset_ < block_len()) {
       ++offset_;
     } else if (block_ < (text_.size() - 1)) {
@@ -169,6 +175,10 @@ public:
       return false;
     }
     return true;
+  }
+
+  bool move_down() {
+    return CalcOffset(false);
   }
 
   TextBlock& current_block() {
@@ -208,6 +218,55 @@ public:
     return true;
   }
 
+private:
+  bool CalcOffset(bool up_or_down) {
+    std::vector<DWRITE_LINE_METRICS> line_metrics;
+    auto& cb = current_block();
+    if (cb.metrics.lineCount == -1)
+      __debugbreak();
+
+    line_metrics.resize(cb.metrics.lineCount);
+    uint32_t actual_line_count;
+    auto hr = cb.layout->GetLineMetrics(
+        &line_metrics.front(), cb.metrics.lineCount, &actual_line_count);
+
+    uint32_t acc = 0;
+    size_t line_no = 0;
+    uint32_t line_len = 0;
+    for (auto& lm : line_metrics) {
+      acc += lm.length;
+      if (acc > offset_) {
+        line_len = lm.length;
+        break;
+      }
+      ++line_no;
+    }
+
+    if (!line_len)
+      __debugbreak();
+
+    auto line_offset = desired_col_ ?
+        desired_col_ :
+        offset_ - (acc - line_len);
+
+    if ((line_no + 1) == cb.metrics.lineCount) {
+      // end of the block. Move to next block.
+      // $$ this is mostly wrong.
+      ++block_;
+      offset_ = line_offset;
+      return true;
+    }
+
+    auto& next_metrics = line_metrics[line_no + 1];
+    if (next_metrics.length < line_offset) {
+      // next line is shorter, remember the column so we can try again.
+      desired_col_ = line_offset;
+      line_offset = next_metrics.length - next_metrics.newlineLength;
+    }
+
+    offset_ = acc + line_offset;
+    return true;
+  }
 };
 
 #pragma endregion
@@ -288,6 +347,8 @@ private:
     plx::Range<uint8_t> block(nullptr, fsz);
     auto heap = plx::HeapRange(block);
     auto bytes_read = file.read(block);
+    // remove all CR so we only end up with LF.
+    auto last = std::remove(block.start(), block.end(), '\r');
     return plx::UTF16FromUTF8(plx::Range<const uint8_t>(block.start(), bytes_read));
   }
 };
@@ -414,6 +475,7 @@ public:
       dc->DrawTextLayout(D2D1::Point2F(offset_x, 40.0f), greetings.Get(), brush.Get());
     }
     dco_device_->Commit();
+
   }
 
   LRESULT message_handler(const UINT message, WPARAM wparam, LPARAM lparam) {
@@ -471,6 +533,9 @@ public:
         ::Beep(440, 10);
         return 0L;
       }
+    }
+    if (vkey == VK_DOWN) {
+      cursor_.move_down();
     }
 
     update_screen();
@@ -654,7 +719,7 @@ public:
           }
         } else if (painting) {
           // we went outside of the viewport, no need to do more work right now.
-            break;
+          break;
         }
         ++block_number;
       }
