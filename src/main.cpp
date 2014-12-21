@@ -181,6 +181,10 @@ public:
     return CalcOffset(false);
   }
 
+  bool move_up() {
+    return CalcOffset(true);
+  }
+
   TextBlock& current_block() {
     return text_[block_];
   }
@@ -249,22 +253,39 @@ private:
         desired_col_ :
         offset_ - (acc - line_len);
 
-    if ((line_no + 1) == cb.metrics.lineCount) {
-      // end of the block. Move to next block.
-      // $$ this is mostly wrong.
-      ++block_;
-      offset_ = line_offset;
-      return true;
+    if (!up_or_down) {
+      // going down.
+      if ((line_no + 1) == cb.metrics.lineCount) {
+        // end of the block. Move to next block.
+        // $$ this is mostly wrong.
+        ++block_;
+        offset_ = line_offset;
+        return true;
+      }
+
+      auto& next_metrics = line_metrics[line_no + 1];
+      if (next_metrics.length < line_offset) {
+        // next line is shorter, remember the column so we can try again.
+        desired_col_ = line_offset;
+        line_offset = next_metrics.length - next_metrics.newlineLength;
+      }
+
+      offset_ = acc + line_offset;
+    } else {
+      // going up.
+      if (line_no == 0)
+        return true;
+
+      auto& next_metrics = line_metrics[line_no - 1];
+      if (next_metrics.length < line_offset) {
+        // prev line is shorter, emember the column so we can try again.
+        desired_col_ = line_offset;
+        line_offset = next_metrics.length - next_metrics.newlineLength;
+      }
+
+      offset_ = (acc -line_len) - next_metrics.length + line_offset;
     }
 
-    auto& next_metrics = line_metrics[line_no + 1];
-    if (next_metrics.length < line_offset) {
-      // next line is shorter, remember the column so we can try again.
-      desired_col_ = line_offset;
-      line_offset = next_metrics.length - next_metrics.newlineLength;
-    }
-
-    offset_ = acc + line_offset;
     return true;
   }
 };
@@ -533,6 +554,9 @@ public:
         ::Beep(440, 10);
         return 0L;
       }
+    }
+    if (vkey == VK_UP) {
+      cursor_.move_up();
     }
     if (vkey == VK_DOWN) {
       cursor_.move_down();
