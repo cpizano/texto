@@ -374,7 +374,7 @@ public:
         continue;
       }
 
-      text.emplace_back(fulltext.substr(start, sz - 1));
+      text.emplace_back(fulltext.substr(start, sz));
       start = brk + 1;
       ++brk;
     }
