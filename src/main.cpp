@@ -464,8 +464,8 @@ public:
   DCoWindow(int width, int height)
       : width_(width), height_(height), cursor_(text_), scroll_v_(0.0f) {
     // $$ read from config.
-    margin_tl_ = D2D1::Point2F(12.0f, 36.0f);
-    margin_br_ = D2D1::Point2F(6.0f, 16.0f);
+    margin_tl_ = D2D1::Point2F(22.0f, 36.0f);
+    margin_br_ = D2D1::Point2F(8.0f, 16.0f);
 
     // create the window.
     create_window(WS_EX_NOREDIRECTIONBITMAP,
@@ -770,6 +770,8 @@ public:
       auto dc = sd.begin(D2D1::ColorF(0x000000, bk_alpha), zero_offset);
       dc->DrawGeometry(circle_geom_move_.Get(), brushes_[brush_blue].Get(), 4.0f);
       dc->DrawGeometry(circle_geom_close_.Get(), brushes_[brush_red].Get(), 4.0f);
+      dc->DrawLine(margin_tl_, D2D1::Point2F(margin_tl_.x, height_ - margin_br_.y),
+                   brushes_[brush_blue].Get(), 0.5f);
 
       float bottom = 0.0f;
       auto v_min = scroll_v_;
