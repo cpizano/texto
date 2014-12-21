@@ -231,7 +231,7 @@ public:
   }
 
 private:
-  bool vertical_move(bool up_or_down) {
+  bool vertical_move(bool up_or_down, bool inner = false) {
     std::vector<DWRITE_LINE_METRICS> line_metrics;
     auto& cb = current_block();
     if (cb.metrics.lineCount == -1)
@@ -264,6 +264,17 @@ private:
         __debugbreak();
     }
 
+
+    if (inner) {
+      // called from vertical_move() on block transition.
+      if (!up_or_down) {
+        offset_ = std::min(line_metrics[0].length, desired_col_);
+      } else {
+        offset_ = acc + std::min(line_metrics[line_no].length, desired_col_);
+      }
+      return true;
+    }
+
     auto line_offset = desired_col_ ? desired_col_ : offset_ - acc;
 
     if (!up_or_down) {
@@ -276,8 +287,9 @@ private:
           return false;
         }
         ++block_;
-        offset_ = line_offset;
-        return true;
+        offset_ = 0;
+        desired_col_ = line_offset;
+        return vertical_move(false, true);
       }
 
       auto& next_metrics = line_metrics[line_no + 1];
@@ -297,8 +309,9 @@ private:
           return false;
         }
         --block_;
-        offset_ = 0;
-        return true;
+        offset_ = block_len() - 1;
+        desired_col_ = line_offset;
+        return vertical_move(true, true);
       }
 
       auto& prev_metrics = line_metrics[line_no - 1];
