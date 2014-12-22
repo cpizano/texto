@@ -11,7 +11,6 @@
 
 namespace ui_txt {
   const wchar_t gretting[] = L"Welcome to the TExTO editor\n"
-                             L"      by AlienRancher      \n"
                              L"                           \n"
                              L" -- start typing to begin -- ";;
 }
@@ -792,14 +791,15 @@ public:
             ((tb.metrics.top < v_min) && (bottom  > v_max))) {
           painting = true;
           // in view, paint it.
-          dc->SetTransform(D2D1::Matrix3x2F::Translation(0.0f, tb.metrics.top - scroll_v_));
-          dc->DrawTextLayout(margin_tl_, tb.layout.Get(), brushes_[brush_text].Get()); 
+          dc->SetTransform(D2D1::Matrix3x2F::Translation(
+              margin_tl_.x,
+              tb.metrics.top - scroll_v_ + margin_tl_.y));
+          dc->DrawTextLayout(D2D1::Point2F(), tb.layout.Get(), brushes_[brush_text].Get()); 
           // debugging rectangle.
           if (flag_options_[debug_text_boxes]) {
             dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
             auto debug_rect = 
-                D2D1::RectF(tb.metrics.left + margin_tl_.x, margin_tl_.y,
-                            tb.metrics.width + margin_tl_.x, tb.metrics.height + margin_tl_.y);
+                D2D1::RectF(tb.metrics.left, 0, tb.metrics.width, tb.metrics.height);
             dc->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f);
           }
           if (cursor_.block_number() == block_number) {
@@ -811,8 +811,6 @@ public:
                 cursor_.current_offset(), FALSE, &x, &y, &hit_metrics);
             if (hr != S_OK)
               throw plx::ComException(__LINE__, hr);
-            x += margin_tl_.x;
-            y += margin_tl_.y;
             dc->DrawRectangle(
                 D2D1::RectF(x, y, x + 2.0f, y + hit_metrics.height),
                 brushes_[brush_red].Get());
