@@ -7,7 +7,7 @@
 // 3. Dropbox folder aware
 // 4. Number of lines
 // 5. darken the entire line of the cursor
-//
+// 6. be more permissive with the utf16 conversion
 
 namespace ui_txt {
   const wchar_t gretting[] = L"Welcome to the TExTO editor\n"
@@ -762,6 +762,50 @@ public:
       scroll_v_ = y; 
   }
 
+  void draw_marks(ID2D1DeviceContext* dc, IDWriteTextLayout* tl) {
+    uint32_t count = 0;
+    auto hr = tl->GetClusterMetrics(nullptr,  0, &count);
+    if (hr == S_OK)
+      return;
+
+    if (hr != E_NOT_SUFFICIENT_BUFFER) {
+      __debugbreak();
+    }
+    std::vector<DWRITE_CLUSTER_METRICS> metrics(count);
+    hr = tl->GetClusterMetrics(&metrics[0], count, &count);
+    if (hr != S_OK) {
+      __debugbreak();
+    }
+
+    uint32_t offset = 0;
+    float width = 0.0f;
+    float height = 0.0f;
+
+    for (auto& cm : metrics) {
+      ID2D1Brush* brush = nullptr;
+      if (cm.isNewline) {
+        brush = brushes_[brush_blue].Get();
+        width = 3.0f;
+        height = 3.0f;
+      } else if (cm.isWhitespace) {
+        brush = brushes_[brush_blue].Get();
+        width = cm.width;
+        height = 1.0f;
+      }
+
+      if (brush) {
+        DWRITE_HIT_TEST_METRICS hit_metrics;
+        float x, y;
+        hr = tl->HitTestTextPosition(offset, FALSE, &x, &y, &hit_metrics);
+        if (hr != S_OK)
+          __debugbreak();
+        y += (2.0f * hit_metrics.height) / 3.0f;
+        dc->DrawRectangle(D2D1::RectF(x, y, x + width, y + height), brush);
+      }
+      offset += cm.length;
+    }
+  }
+
   void update_screen() {
     {
       ScopedDraw sd(root_surface_, dpi_);
@@ -795,12 +839,14 @@ public:
               margin_tl_.x,
               tb.metrics.top - scroll_v_ + margin_tl_.y));
           dc->DrawTextLayout(D2D1::Point2F(), tb.layout.Get(), brushes_[brush_text].Get()); 
-          // debugging rectangle.
+          // debugging visual aids.
           if (flag_options_[debug_text_boxes]) {
             dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
             auto debug_rect = 
                 D2D1::RectF(tb.metrics.left, 0, tb.metrics.width, tb.metrics.height);
             dc->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f);
+            // show space and line breaks.
+            draw_marks(dc.Get(), tb.layout.Get());
           }
           if (cursor_.block_number() == block_number) {
             // draw caret since it is visible.
