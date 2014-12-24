@@ -150,6 +150,14 @@ public:
     return block_;
   }
 
+  bool is_last_block() const {
+    return block_ >= (text_.size() - 1);
+  }
+
+  bool is_first_block() const {
+    return block_ <= 0;
+  }
+
   bool move_left() {
     desired_col_ = 0;
     if (offset_ > 0) {
@@ -204,37 +212,61 @@ public:
   }
 
   bool remove_char() {
-    auto& txt = current_block().text;
-    if (offset_ == 0)
-      return false;   // $$$ handle erasure here.
-
-    if (!txt->empty()) {
-      txt->erase(--offset_, 1);
-    } else if (block_ != 0) {
-      auto it = begin(text_) + block_;
-      text_.erase(it);
-      --block_;
-      offset_ = block_len();
-    } else {
+    if (!block_len())
+      return remove_block();
+    if (offset_ != 0)
+      return erase_char();
+    if (is_first_block())
       return false;
-    }
-    return true;
-  }
-
-  bool is_last_block() const {
-    return block_ >= (text_.size() - 1);
-  }
-
-  bool is_first_block() const {
-    return block_ <= 0;
+    else 
+      return move_block_up();
   }
 
 private:
+  bool erase_char() {
+    auto& txt = current_block().text;
+    txt->erase(--offset_, 1);
+    return true;
+  }
+
+  bool remove_block() {
+    if (is_first_block())
+      return false;
+    auto it = begin(text_) + block_;
+    text_.erase(it);
+    --block_;
+    offset_ = block_len();
+    return true;
+  }
+
+  bool move_block_up() {
+    auto& txt = current_block().text;
+    std::wstring moved;
+    auto lf = txt->find_first_of(L'\n');
+    if (lf == std::wstring::npos) {
+      // move the entire block.
+      txt->swap(moved);
+      auto it = begin(text_) + block_;
+      text_.erase(it);
+    } else {
+      // move just a chunk of text.
+      txt->substr(0, lf).swap(moved);
+      txt->erase(0, lf + 1);
+    }
+    --block_;
+    current_block().text->append(moved);
+    offset_ = plx::To<uint32_t>(current_block().text->size() - moved.size());
+    current_block().set_needs_layout();
+    return true;
+  }
+
   bool vertical_move(bool up_or_down, bool inner = false) {
     std::vector<DWRITE_LINE_METRICS> line_metrics;
     auto& cb = current_block();
-    if (cb.metrics.lineCount == -1)
+    if (cb.needs_layout()) {
+      // we rely on layout being current
       __debugbreak();
+    }
 
     line_metrics.resize(cb.metrics.lineCount);
     uint32_t actual_line_count;
