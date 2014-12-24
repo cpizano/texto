@@ -47,6 +47,46 @@ Settings LoadSettings() {
   return Settings();
 }
 
+class FileOpenDialog {
+  plx::ComPtr<IShellItem> item_;
+
+public:
+  FileOpenDialog(HWND owner) {
+    plx::ComPtr<IFileDialog> dialog;
+    auto hr = ::CoCreateInstance(CLSID_FileOpenDialog, NULL, 
+                                 CLSCTX_INPROC_SERVER,
+                                 __uuidof(dialog),
+                                 reinterpret_cast<void **>(dialog.GetAddressOf()));
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+
+    DWORD flags;
+    hr = dialog->GetOptions(&flags);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+    dialog->SetOptions(flags | FOS_FORCEFILESYSTEM);
+    hr = dialog->Show(owner);
+    if (hr != S_OK)
+      return;
+    
+    dialog->GetResult(item_.GetAddressOf());
+  }
+
+  bool success() const {
+    return item_ ? true : false;
+  }
+
+  plx::FilePath path() const {
+    wchar_t* file_path = nullptr;
+    auto hr = item_->GetDisplayName(SIGDN_FILESYSPATH, &file_path);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+    plx::FilePath fp(file_path);
+    ::CoTaskMemFree(file_path);
+    return fp;
+  }
+};
+
 const D2D1_SIZE_F zero_offset = {0};
 
 class ScopedDraw {
@@ -712,8 +752,11 @@ public:
       ptfio.save(text_);
     }
     if (command_id == IDC_LOAD_PLAINTEXT) {
+      FileOpenDialog dialog(window());
+      if (!dialog.success())
+        return 0L;
       text_.clear();
-      PlainTextFileIO ptfio(plx::FilePath(L"c:\\test\\texto_file_in.txt"));
+      PlainTextFileIO ptfio(dialog.path());
       ptfio.load(text_);
     }
 
@@ -810,6 +853,7 @@ public:
     uint32_t offset = 0;
     float width = 0.0f;
     float height = 0.0f;
+    float x_offset = 0.0f;
 
     for (auto& cm : metrics) {
       ID2D1Brush* brush = nullptr;
@@ -817,10 +861,12 @@ public:
         brush = brushes_[brush_blue].Get();
         width = 3.0f;
         height = 3.0f;
+        x_offset = 1.0f;
       } else if (cm.isWhitespace) {
         brush = brushes_[brush_blue].Get();
-        width = cm.width;
+        width = 1.0f;
         height = 1.0f;
+        x_offset = cm.width / 3.0f;
       }
 
       if (brush) {
@@ -830,6 +876,7 @@ public:
         if (hr != S_OK)
           __debugbreak();
         y += (2.0f * hit_metrics.height) / 3.0f;
+        x += x_offset;
         dc->DrawRectangle(D2D1::RectF(x, y, x + width, y + height), brush);
       }
       offset += cm.length;
