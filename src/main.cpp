@@ -261,20 +261,18 @@ private:
   }
 
   bool vertical_move(bool up_or_down, bool inner = false) {
-    std::vector<DWRITE_LINE_METRICS> line_metrics;
-    auto& cb = current_block();
-    if (cb.needs_layout()) {
-      // we rely on layout being current
+    uint32_t line_count;
+    auto hr = current_block().layout->GetLineMetrics(
+        nullptr, 0, &line_count);
+    if (hr != E_NOT_SUFFICIENT_BUFFER) {
       __debugbreak();
     }
 
-    line_metrics.resize(cb.metrics.lineCount);
-    uint32_t actual_line_count;
-    auto hr = cb.layout->GetLineMetrics(
-        &line_metrics.front(), cb.metrics.lineCount, &actual_line_count);
-
-    if (actual_line_count == 0)
-      return false;
+    std::vector<DWRITE_LINE_METRICS> line_metrics(line_count);
+    hr = current_block().layout->GetLineMetrics(
+        &line_metrics.front(), line_count, &line_count);
+    if (hr != S_OK)
+      __debugbreak();
 
     uint32_t acc = 0;
     size_t line_no = 0;
@@ -295,7 +293,6 @@ private:
         __debugbreak();
     }
 
-
     if (inner) {
       // called from vertical_move() on block transition.
       if (!up_or_down) {
@@ -309,14 +306,14 @@ private:
     auto line_offset = desired_col_ ? desired_col_ : offset_ - acc;
 
     if (!up_or_down) {
-      // going down =============================================
-      if ((line_no + 1) == cb.metrics.lineCount) {
+      // going down ===
+      if ((line_no + 1) == line_count) {
         // end of the block. Move to next block.
-        // $$ this is mostly wrong.
         if (is_last_block()) {
           offset_ = line_len;
           return false;
         }
+        // across blocks we need to recurse to learn the offset.
         ++block_;
         offset_ = 0;
         desired_col_ = line_offset;
@@ -332,13 +329,14 @@ private:
 
       offset_ = (acc + line_len) + line_offset;
     } else {
-      // going up ================================================
+      // going up ===
       if (line_no == 0) {
         // end of the block. Move to previous block.
         if (is_first_block()) {
           offset_ = 0;
           return false;
         }
+        // across blocks we need to recurse to learn the offset.
         --block_;
         offset_ = block_len() - 1;
         desired_col_ = line_offset;
