@@ -8,11 +8,11 @@
 // 4. Number of lines
 // 5. darken the entire line of the cursor
 // 6. be more permissive with the utf16 conversion
+// 7. don't scroll past the top or bottom
+// 8. save to input file
 
 namespace ui_txt {
-  const wchar_t gretting[] = L"Welcome to the TExTO editor\n"
-                             L"                           \n"
-                             L" -- start typing to begin -- ";;
+  const wchar_t no_file_title[] = L"TExTO v0.0.0a <no file> [F2: open]\n";
 }
 
 enum class HardFailures {
@@ -500,6 +500,9 @@ class DCoWindow : public plx::Window <DCoWindow> {
   // the margins are insets from (width and height).
   D2D1_POINT_2F margin_tl_;
   D2D1_POINT_2F margin_br_;
+  // widgets insets from right side.
+  D2D1_POINT_2F widget_pos_;
+  D2D1_POINT_2F widget_radius_;
 
   std::vector<TextBlock> text_;
   Cursor cursor_;
@@ -517,17 +520,27 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<ID2D1Geometry> circle_geom_close_;
 
   plx::ComPtr<IDWriteFactory> dwrite_factory_;
-  plx::ComPtr<IDWriteTextFormat> text_fmt_[2];
+
+  enum TxtFromat {
+    fmt_mono_text,
+    fmt_prop_large,
+    fmt_title_right,
+    fmt_last
+  };
+  plx::ComPtr<IDWriteTextFormat> text_fmt_[fmt_last];
 
   enum Brushes {
     brush_black,
     brush_red,
     brush_blue,
+    brush_green,
     brush_text,
     brush_last
   };
-
   plx::ComPtr<ID2D1SolidColorBrush> brushes_[brush_last];
+
+  plx::ComPtr<IDWriteTextLayout> title_layout_;
+  std::unique_ptr<plx::FilePath> file_path_;
 
 public:
   DCoWindow(int width, int height)
@@ -535,6 +548,8 @@ public:
     // $$ read from config.
     margin_tl_ = D2D1::Point2F(22.0f, 36.0f);
     margin_br_ = D2D1::Point2F(8.0f, 16.0f);
+    widget_pos_ = D2D1::Point2F(18.0f, 18.0f);
+    widget_radius_ = D2D1::Point2F(8.0f, 8.0f);
 
     // create the window.
     create_window(WS_EX_NOREDIRECTIONBITMAP,
@@ -571,17 +586,23 @@ public:
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
 
-    circle_geom_move_ = CreateD2D1Geometry(
-        d2d_factory_,
-        D2D1::Ellipse(D2D1::Point2F(width_ - (18.0f + 22.0f) , 18.0f), 8.0f, 8.0f));
+    // create widget's geometry.
+    circle_geom_close_ = CreateD2D1Geometry(d2d_factory_,
+        D2D1::Ellipse(D2D1::Point2F(width_ - widget_pos_.x , widget_pos_.y),
+                      widget_radius_.x, widget_radius_.y));
+    widget_pos_.x += (widget_radius_.x * 2.0f ) + 8.0f;
+    circle_geom_move_ = CreateD2D1Geometry(d2d_factory_,
+        D2D1::Ellipse(D2D1::Point2F(width_ - widget_pos_.x , widget_pos_.y),
+                      widget_radius_.x, widget_radius_.y));
 
-   circle_geom_close_ = CreateD2D1Geometry(
-        d2d_factory_,
-        D2D1::Ellipse(D2D1::Point2F(width_ - 18.0f , 18.0f), 8.0f, 8.0f));
-
+    // create fonts.
     dwrite_factory_ = plx::CreateDWriteFactory();
-    text_fmt_[0] = CreateDWriteTextFormat(dwrite_factory_, L"Candara", 20.0f);
-    text_fmt_[1] = CreateDWriteTextFormat(dwrite_factory_, L"Consolas", 14.0f);
+    text_fmt_[fmt_mono_text] = CreateDWriteTextFormat(dwrite_factory_, L"Consolas", 14.0f);
+    text_fmt_[fmt_prop_large] = CreateDWriteTextFormat(dwrite_factory_, L"Candara", 20.0f);
+    text_fmt_[fmt_title_right] = CreateDWriteTextFormat(dwrite_factory_, L"Consolas", 12.0f);
+
+    text_fmt_[fmt_title_right]->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+    text_fmt_[fmt_title_right]->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
 
     {
       ScopedDraw sd(root_surface_, dpi_);
@@ -590,28 +611,35 @@ public:
       // create solid brushes.
       dc->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black, 1.0f), 
           brushes_[brush_black].GetAddressOf());
-      dc->CreateSolidColorBrush(D2D1::ColorF(0xE90000, 1.0f), 
+      dc->CreateSolidColorBrush(D2D1::ColorF(0xBD4B5B, 1.0f), 
           brushes_[brush_red].GetAddressOf());
       dc->CreateSolidColorBrush(D2D1::ColorF(0x1E5D81, 1.0f), 
           brushes_[brush_blue].GetAddressOf());
+      dc->CreateSolidColorBrush(D2D1::ColorF(RGB(74, 174, 0), 1.0),
+          brushes_[brush_green].GetAddressOf());
       dc->CreateSolidColorBrush(D2D1::ColorF(RGB(57, 135, 214), 1.0f), 
           brushes_[brush_text].GetAddressOf());
-
-      //// Render start UI ////////////////////////////////////////////////////////////////////
-      auto title_fmt = CreateDWriteTextFormat(dwrite_factory_, L"Candara", 34.0f);
-      auto txt = plx::RangeFromLitStr(ui_txt::gretting);
-      auto size = D2D1::SizeF(static_cast<float>(width_), static_cast<float>(height_));
-      auto greetings = plx::CreateDWTextLayout(dwrite_factory_, title_fmt, txt, size);
-
-      plx::ComPtr<ID2D1SolidColorBrush> brush;
-      dc->CreateSolidColorBrush(D2D1::ColorF(RGB(74, 174, 0), 1.0), brush.GetAddressOf());
-      DWRITE_TEXT_METRICS text_metrics;
-      greetings->GetMetrics(&text_metrics);
-      auto offset_x = (static_cast<float>(width_) - text_metrics.width) / 2.0f; 
-      dc->DrawTextLayout(D2D1::Point2F(offset_x, 40.0f), greetings.Get(), brush.Get());
     }
-    dco_device_->Commit();
+    
+    if (!file_path_)
+      update_title(plx::RangeFromLitStr(ui_txt::no_file_title));
+    else {
+      // $$ schedule a task to load the file.
+    }
 
+    update_screen();
+  }
+
+  void update_title(plx::Range<const wchar_t>& title) {
+    auto width = width_ - (widget_pos_.x + widget_radius_.x + 6.0f + margin_tl_.x);
+    auto height = text_fmt_[fmt_title_right]->GetFontSize() * 1.2f;
+    title_layout_ = plx::CreateDWTextLayout(dwrite_factory_,
+        text_fmt_[fmt_title_right], title, D2D1::SizeF(width, height));
+  }
+
+  void update_title(const plx::FilePath& path) {
+    std::wstring title(path.raw());
+    update_title(plx::Range<const wchar_t>(&title[0], title.size()));
   }
 
   LRESULT message_handler(const UINT message, WPARAM wparam, LPARAM lparam) {
@@ -758,6 +786,8 @@ public:
       text_.clear();
       PlainTextFileIO ptfio(dialog.path());
       ptfio.load(text_);
+      file_path_ = std::make_unique<plx::FilePath>(dialog.path());
+      update_title(*file_path_);
     }
 
     update_screen();
@@ -888,11 +918,16 @@ public:
       ScopedDraw sd(root_surface_, dpi_);
       auto bk_alpha = flag_options_[opacity_50_percent] ? 0.5f : 0.9f;
       auto dc = sd.begin(D2D1::ColorF(0x000000, bk_alpha), zero_offset);
+      // draw widgets.
       dc->DrawGeometry(circle_geom_move_.Get(), brushes_[brush_blue].Get(), 4.0f);
       dc->DrawGeometry(circle_geom_close_.Get(), brushes_[brush_red].Get(), 4.0f);
+      // draw margin.
       dc->DrawLine(margin_tl_, D2D1::Point2F(margin_tl_.x, height_ - margin_br_.y),
                    brushes_[brush_blue].Get(), 0.5f);
-
+      // draw title.
+      dc->DrawTextLayout(D2D1::Point2F(margin_tl_.x, widget_pos_.y - widget_radius_.y),
+                         title_layout_.Get(), brushes_[brush_green].Get());
+      // draw contents.
       float bottom = 0.0f;
       auto v_min = scroll_v_;
       auto v_max = scroll_v_ + static_cast<float>(height_);
@@ -955,8 +990,9 @@ public:
 HACCEL LoadAccelerators() {
   // $$ read this from the config file.
   ACCEL accelerators[] = {
-    {FVIRTKEY, VK_F1, IDC_SAVE_PLAINTEXT},
+    {FVIRTKEY, VK_F1, IDC_VIEW_HELP},
     {FVIRTKEY, VK_F2, IDC_LOAD_PLAINTEXT},
+    {FVIRTKEY, VK_F3, IDC_SAVE_PLAINTEXT},
     {FVIRTKEY, VK_F10, IDC_DBG_TEXT_BOXES},
     {FVIRTKEY, VK_F11, IDC_50P_TRANSPARENT},
     {FVIRTKEY, VK_F9, IDC_ALT_FONT}

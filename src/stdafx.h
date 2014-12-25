@@ -22,13 +22,13 @@
 #include <initializer_list>
 #include <cctype>
 #include <iterator>
+#include <memory>
 #include <map>
 #include <algorithm>
 #include <utility>
 #include <limits>
 #include <type_traits>
 #include <string>
-#include <memory>
 #include <vector>
 #include <stdint.h>
 #include <windows.h>
