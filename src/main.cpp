@@ -926,6 +926,20 @@ public:
       // draw title.
       dc->DrawTextLayout(D2D1::Point2F(margin_tl_.x, widget_pos_.y - widget_radius_.y),
                          title_layout_.Get(), brushes_[brush_green].Get());
+
+      // draw left margin.
+      dc->DrawLine(D2D1::Point2F(margin_tl_.x, margin_tl_.y),
+                   D2D1::Point2F(margin_tl_.x, height_ - margin_br_.y),
+                   brushes_[brush_blue].Get(), 0.5f);
+
+      // draw the start of text line marker.
+      if (scroll_v_ < 0) {
+        dc->SetTransform(D2D1::Matrix3x2F::Translation(margin_tl_.x, margin_tl_.y - scroll_v_));
+        dc->DrawLine(D2D1::Point2F(0.0f, -8.0f),
+                      D2D1::Point2F(static_cast<float>(width_), -8.0f),
+                      brushes_[brush_blue].Get(), 0.5f);
+      }
+
       // draw contents.
       float bottom = 0.0f;
       auto v_min = scroll_v_;
@@ -948,16 +962,8 @@ public:
           // in view, paint it.
           dc->SetTransform(D2D1::Matrix3x2F::Translation(
               margin_tl_.x,
-              tb.metrics.top - scroll_v_ + margin_tl_.y));
+              tb.metrics.top + margin_tl_.y - scroll_v_));
           dc->DrawTextLayout(D2D1::Point2F(), tb.layout.Get(), brushes_[brush_text].Get());
-          // draw the start of text line marker.
-          if (scroll_v_ < 0)
-            dc->DrawLine(D2D1::Point2F(0.0f, -8.0f),
-                         D2D1::Point2F(static_cast<float>(width_), -8.0f),
-                         brushes_[brush_blue].Get(), 0.5f);
-          // draw margin.
-          dc->DrawLine(D2D1::Point2F(), D2D1::Point2F(0.0f, height_ - margin_br_.y),
-                       brushes_[brush_blue].Get(), 0.5f);
 
           // debugging visual aids.
           if (flag_options_[debug_text_boxes]) {
