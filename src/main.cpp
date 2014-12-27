@@ -2,14 +2,16 @@
 #include "resource.h"
 
 // Ideas
-// 1. Modified text (like VS ide) side column marker
-// 2. Column guides (80 cols, etc)
-// 3. Dropbox folder aware
-// 4. Number of lines
-// 5. darken the entire line of the cursor
-// 6. be more permissive with the utf16 conversion
-// 7. don't scroll past the top or bottom
-// 8. save to input file
+// 1.  Modified text (like VS ide) side column marker
+// 2.  Column guides (80 cols, etc)
+// 3.  Dropbox folder aware
+// 4.  Number of lines
+// 5.  darken the entire line of the cursor
+// 6.  be more permissive with the utf16 conversion
+// 7.  don't scroll past the top or bottom
+// 8.  save to input file
+// 9.  spellchecker
+// 10. find in text
 
 namespace ui_txt {
   const wchar_t no_file_title[] = L"TExTO v0.0.0a <no file> [F2: open]\n";
