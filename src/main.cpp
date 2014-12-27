@@ -98,7 +98,7 @@ class ScopedDraw {
 
 public:
   ScopedDraw(plx::ComPtr<IDCompositionSurface> ics,
-          const plx::DPI& dpi) 
+             const plx::DPI& dpi) 
     : drawing_(false),
       ics_(ics),
       dpi_(dpi) {
@@ -198,6 +198,14 @@ public:
 
   bool is_first_block() const {
     return block_ <= 0;
+  }
+
+  bool move_to(uint32_t block, uint32_t offset) {
+    if (block >= text_.size())
+      return false;
+    block_ = block;
+    offset_ = offset > block_len() ? block_len() : offset;
+    return true;
   }
 
   bool move_left() {
@@ -510,6 +518,9 @@ class DCoWindow : public plx::Window <DCoWindow> {
   Cursor cursor_;
   float scroll_v_;
 
+  size_t first_block_in_view_;
+  size_t last_block_in_view_;
+
   plx::ComPtr<ID3D11Device> d3d_device_;
   plx::ComPtr<ID2D1Factory2> d2d_factory_;
   plx::ComPtr<ID2D1Device> d2d_device_;
@@ -546,7 +557,10 @@ class DCoWindow : public plx::Window <DCoWindow> {
 
 public:
   DCoWindow(int width, int height)
-      : width_(width), height_(height), cursor_(text_), scroll_v_(0.0f) {
+      : width_(width), height_(height),
+        cursor_(text_),
+        scroll_v_(0.0f),
+        first_block_in_view_(0), last_block_in_view_(0) {
     // $$ read from config.
     margin_tl_ = D2D1::Point2F(22.0f, 36.0f);
     margin_br_ = D2D1::Point2F(8.0f, 16.0f);
@@ -723,11 +737,17 @@ public:
   LRESULT left_mouse_button_handler(bool down, POINTS pts) {
     BOOL hit = 0;
     if (down) {
+      // check hit for move window widget.
       circle_geom_move_->FillContainsPoint(
           D2D1::Point2F(pts.x, pts.y), D2D1::Matrix3x2F::Identity(), &hit);
       if (hit != 0) {
         ::SendMessageW(window(), WM_SYSCOMMAND, SC_MOVE|0x0002, 0);
+      } else {
+        // probably on the text. Move cursor there.
+        if (move_cursor(pts))
+          update_screen();
       }
+      
     } else {
       circle_geom_close_->FillContainsPoint(
           D2D1::Point2F(pts.x, pts.y), D2D1::Matrix3x2F::Identity(), &hit);
@@ -869,6 +889,45 @@ public:
       scroll_v_ = y; 
   }
 
+  bool move_cursor(POINTS pts) {
+    if (first_block_in_view_ == last_block_in_view_)
+      return false;
+
+    auto y = static_cast<float>(pts.y) + scroll_v_ - margin_tl_.y;
+    auto x = static_cast<float>(pts.x) - margin_tl_.x;
+
+    for (uint32_t ix = plx::To<uint32_t>(first_block_in_view_); ix != last_block_in_view_; ++ix) {
+      if (text_[ix].metrics.top > y) {
+        if (ix == 0) {
+          //$$ handle hits above start of text.
+          return false;
+        }
+        // found the block. Make |y| relative to it.
+        --ix;
+        auto& tb = text_[ix];
+        y -= tb.metrics.top;
+        if (x < 0.0f) {
+          //$$ handle hits on the left margin.
+          return false;
+        }
+        if (y < 0.0f)
+          __debugbreak();
+
+        BOOL inside, trailing;
+        DWRITE_HIT_TEST_METRICS hit_metrics;
+        auto hr = tb.layout->HitTestPoint(x, y, &trailing, &inside, &hit_metrics);
+        if (hr != S_OK)
+          __debugbreak();
+        // if the hit is in an actual glyph, |inside| is true but anyhow we want to position
+        // the cursor at the end of the line which |hit_metrics| returns.
+        cursor_.move_to(ix, hit_metrics.textPosition);
+        return true;
+      }
+    }
+    // we come here when the hit is below the last block.
+    return false;
+  }
+
   void draw_marks(ID2D1DeviceContext* dc, IDWriteTextLayout* tl) {
     uint32_t count = 0;
     auto hr = tl->GetClusterMetrics(nullptr,  0, &count);
@@ -960,8 +1019,12 @@ public:
         if (((bottom > v_min) && (bottom < v_max)) || 
             ((tb.metrics.top > v_min) && (tb.metrics.top < v_max)) ||
             ((tb.metrics.top < v_min) && (bottom  > v_max))) {
-          painting = true;
+
           // in view, paint it.
+          if (!painting)
+            first_block_in_view_ = block_number;
+
+          painting = true;
           dc->SetTransform(D2D1::Matrix3x2F::Translation(
               margin_tl_.x,
               tb.metrics.top + margin_tl_.y - scroll_v_));
@@ -991,6 +1054,7 @@ public:
           }
         } else if (painting) {
           // we went outside of the viewport, no need to do more work right now.
+          last_block_in_view_ = block_number;
           break;
         }
         ++block_number;
