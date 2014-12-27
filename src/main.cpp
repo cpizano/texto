@@ -742,6 +742,8 @@ public:
 
   LRESULT mouse_wheel_handler(int16_t offset, int16_t vkey) {
     // $$ read the divisor from the config file.
+    if ((offset > 0) && (scroll_v_ < -100.0f))
+      return 0L;
     scroll_v_ -= offset / 4;
     update_screen();
     return 0L;
@@ -921,9 +923,6 @@ public:
       // draw widgets.
       dc->DrawGeometry(circle_geom_move_.Get(), brushes_[brush_blue].Get(), 4.0f);
       dc->DrawGeometry(circle_geom_close_.Get(), brushes_[brush_red].Get(), 4.0f);
-      // draw margin.
-      dc->DrawLine(margin_tl_, D2D1::Point2F(margin_tl_.x, height_ - margin_br_.y),
-                   brushes_[brush_blue].Get(), 0.5f);
       // draw title.
       dc->DrawTextLayout(D2D1::Point2F(margin_tl_.x, widget_pos_.y - widget_radius_.y),
                          title_layout_.Get(), brushes_[brush_green].Get());
@@ -950,7 +949,16 @@ public:
           dc->SetTransform(D2D1::Matrix3x2F::Translation(
               margin_tl_.x,
               tb.metrics.top - scroll_v_ + margin_tl_.y));
-          dc->DrawTextLayout(D2D1::Point2F(), tb.layout.Get(), brushes_[brush_text].Get()); 
+          dc->DrawTextLayout(D2D1::Point2F(), tb.layout.Get(), brushes_[brush_text].Get());
+          // draw the start of text line marker.
+          if (scroll_v_ < 0)
+            dc->DrawLine(D2D1::Point2F(0.0f, -8.0f),
+                         D2D1::Point2F(static_cast<float>(width_), -8.0f),
+                         brushes_[brush_blue].Get(), 0.5f);
+          // draw margin.
+          dc->DrawLine(D2D1::Point2F(), D2D1::Point2F(0.0f, height_ - margin_br_.y),
+                       brushes_[brush_blue].Get(), 0.5f);
+
           // debugging visual aids.
           if (flag_options_[debug_text_boxes]) {
             dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
