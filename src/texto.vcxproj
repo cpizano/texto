@@ -160,6 +160,7 @@
   <ItemGroup>
     <ClInclude Include="resource.h" />
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="texto.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="config.json" />
