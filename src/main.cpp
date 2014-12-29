@@ -147,9 +147,6 @@ plx::ComPtr<IDWriteTextFormat> CreateDWriteTextFormat(
   return format;
 }
 
-#pragma region text_management
-#pragma endregion
-
 class PlainTextFileIO {
   const plx::FilePath path_;
   const size_t io_size = 32 * 1024;
@@ -258,6 +255,7 @@ class DCoWindow : public plx::Window <DCoWindow> {
   std::vector<TextBlock> text_;
   Cursor cursor_;
   float scroll_v_;
+  float scale_;
 
   size_t first_block_in_view_;
   size_t last_block_in_view_;
@@ -301,6 +299,7 @@ public:
       : width_(width), height_(height),
         cursor_(text_),
         scroll_v_(0.0f),
+        scale_(1.0f),
         first_block_in_view_(0), last_block_in_view_(0) {
     // $$ read from config.
     margin_tl_ = D2D1::Point2F(22.0f, 36.0f);
@@ -378,25 +377,26 @@ public:
           brushes_[brush_text].GetAddressOf());
     }
     
-    if (!file_path_)
-      update_title(plx::RangeFromLitStr(ui_txt::no_file_title));
-    else {
-      // $$ schedule a task to load the file.
-    }
-
+    update_title();
     update_screen();
   }
 
-  void update_title(plx::Range<const wchar_t>& title) {
+  void update_title(const std::wstring& title) {
+    plx::Range<const wchar_t> r(&title[0], title.size());
     auto width = width_ - (widget_pos_.x + widget_radius_.x + 6.0f + margin_tl_.x);
     auto height = text_fmt_[fmt_title_right]->GetFontSize() * 1.2f;
     title_layout_ = plx::CreateDWTextLayout(dwrite_factory_,
-        text_fmt_[fmt_title_right], title, D2D1::SizeF(width, height));
+        text_fmt_[fmt_title_right], r, D2D1::SizeF(width, height));
   }
 
-  void update_title(const plx::FilePath& path) {
-    std::wstring title(path.raw());
-    update_title(plx::Range<const wchar_t>(&title[0], title.size()));
+  void update_title() {
+    std::wstring title(L"scale: " + std::to_wstring(scale_).substr(0, 4) + L"  ");
+    if (!file_path_) {
+      title += ui_txt::no_file_title;
+    } else {
+      title += file_path_->raw();
+    }
+    update_title(title);
   }
 
   LRESULT message_handler(const UINT message, WPARAM wparam, LPARAM lparam) {
@@ -503,11 +503,33 @@ public:
     return 0L;
   }
 
-  LRESULT mouse_wheel_handler(int16_t offset, int16_t vkey) {
-    // $$ read the divisor from the config file.
-    if ((offset > 0) && (scroll_v_ < -100.0f))
-      return 0L;
-    scroll_v_ -= offset / 4;
+  LRESULT mouse_wheel_handler(int16_t offset, int16_t mk) {
+    if (mk == MK_CONTROL) {
+      // zoom.
+      if (offset < 0) {
+        if (scale_ < 0.3f)
+          return 0L;
+        scale_ -= 0.1f;
+      } else if (offset > 0) {
+        if (scale_ > 2.4f)
+          return 0L;
+        scale_ += 0.1f;
+      } else {
+        return 0L;
+      }
+
+      update_title();
+      for (auto& tb : text_)
+        tb.set_needs_layout();
+
+    } else {
+      // scroll.
+      // $$ read the divisor from the config file.
+      if ((offset > 0) && (scroll_v_ < -100.0f))
+        return 0L;
+      scroll_v_ -= offset / 4;
+    }
+
     update_screen();
     return 0L;
   }
@@ -552,7 +574,7 @@ public:
       PlainTextFileIO ptfio(dialog.path());
       ptfio.load(text_);
       file_path_ = std::make_unique<plx::FilePath>(dialog.path());
-      update_title(*file_path_);
+      update_title();
     }
 
     update_screen();
@@ -593,6 +615,13 @@ public:
     auto box = D2D1::SizeF(
         static_cast<float>(width_) - margin_tl_.x - margin_br_.x,
         static_cast<float>(height_)- margin_tl_.y - margin_tl_.y);
+
+#if 0
+    // this causes us to render more when zoomed out, or less when zoomed in.
+    box.width /= scale_;
+    box.height /= scale_;
+#endif
+
     plx::Range<const wchar_t> txt(block.text->c_str(), block.text->size());
     auto fmt_index = flag_options_[alternate_font] ? 1 : 0;
     block.layout = plx::CreateDWTextLayout(dwrite_factory_, text_fmt_[fmt_index], txt, box);
@@ -729,6 +758,10 @@ public:
       dc->DrawTextLayout(D2D1::Point2F(margin_tl_.x, widget_pos_.y - widget_radius_.y),
                          title_layout_.Get(), brushes_[brush_green].Get());
 
+      auto scale = D2D1::Matrix3x2F::Scale(
+          scale_, scale_, D2D1::Point2F(width_ / 2.0f, 0.0f));
+      dc->SetTransform(scale);
+
       // draw left margin.
       dc->DrawLine(D2D1::Point2F(margin_tl_.x, margin_tl_.y),
                    D2D1::Point2F(margin_tl_.x, height_ - margin_br_.y),
@@ -736,16 +769,16 @@ public:
 
       // draw the start of text line marker.
       if (scroll_v_ < 0) {
-        dc->SetTransform(D2D1::Matrix3x2F::Translation(margin_tl_.x, margin_tl_.y - scroll_v_));
+        dc->SetTransform(D2D1::Matrix3x2F::Translation(margin_tl_.x, margin_tl_.y - scroll_v_) * scale);
         dc->DrawLine(D2D1::Point2F(0.0f, -8.0f),
-                      D2D1::Point2F(static_cast<float>(width_), -8.0f),
-                      brushes_[brush_blue].Get(), 0.5f);
+                     D2D1::Point2F(static_cast<float>(width_), -8.0f),
+                     brushes_[brush_blue].Get(), 0.5f);
       }
 
       // draw contents.
       float bottom = 0.0f;
       auto v_min = scroll_v_;
-      auto v_max = scroll_v_ + static_cast<float>(height_);
+      auto v_max = scroll_v_ + static_cast<float>(height_) / scale_;
 
       uint32_t block_number = 0;
       bool painting = false;
@@ -766,9 +799,11 @@ public:
             first_block_in_view_ = block_number;
 
           painting = true;
-          dc->SetTransform(D2D1::Matrix3x2F::Translation(
-              margin_tl_.x,
-              tb.metrics.top + margin_tl_.y - scroll_v_));
+
+          auto trans = D2D1::Matrix3x2F::Translation(margin_tl_.x,
+                                                     tb.metrics.top + margin_tl_.y - scroll_v_);
+          dc->SetTransform(trans * scale);
+          
           dc->DrawTextLayout(D2D1::Point2F(), tb.layout.Get(), brushes_[brush_text].Get());
 
           // debugging visual aids.
@@ -843,7 +878,8 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE,
   } catch (plx::IOException& ex) {
     HardfailMsgBox(HardFailures::bad_config, ex.Name());
     return 1;
-  } catch (plx::ComException&) {
+  } catch (plx::ComException& ex) {
+    auto l = ex.Line();
     HardfailMsgBox(HardFailures::com_error, L"COM");
     return 2;
   }
