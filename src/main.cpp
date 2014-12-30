@@ -225,7 +225,7 @@ private:
     auto bytes_read = file.read(block);
     // remove all CR so we only end up with LF.
     auto last = std::remove(block.start(), block.end(), '\r');
-    return plx::UTF16FromUTF8(plx::Range<const uint8_t>(block.start(), bytes_read));
+    return plx::UTF16FromUTF8(plx::Range<const uint8_t>(block.start(), last));
   }
 };
 
