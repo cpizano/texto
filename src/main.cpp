@@ -182,7 +182,7 @@ public:
 
     // need to read the whole file at once because the UTF16 conversion fails if
     // we end up in the middle of multi-byte sequence.
-    std::wstring fulltext = file_from_disk(file);
+    const std::wstring fulltext = file_from_disk(file);
 
     size_t brk = 0;
     size_t start = 0;
@@ -378,6 +378,7 @@ public:
           brushes_[brush_text].GetAddressOf());
     }
     
+    cursor_.init();
     update_title();
     update_screen();
   }
@@ -578,6 +579,7 @@ public:
       text_.clear();
       PlainTextFileIO ptfio(dialog.path());
       ptfio.load(text_);
+      cursor_.init();
       file_path_ = std::make_unique<plx::FilePath>(dialog.path());
       update_title();
     }
@@ -699,7 +701,6 @@ public:
         return true;
       }
     }
-    // we come here when the hit is below the last block.
     return false;
   }
 
@@ -834,11 +835,11 @@ public:
           }
         } else if (painting) {
           // we went outside of the viewport, no need to do more work right now.
-          last_block_in_view_ = block_number;
           break;
         }
         ++block_number;
       }
+      last_block_in_view_ = block_number;
     }
     dco_device_->Commit();
   }

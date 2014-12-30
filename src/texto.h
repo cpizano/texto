@@ -23,22 +23,33 @@
 // [1] see http://www.catch22.net/tuts/memory-techniques-part-2
 //
 struct TextBlock {
+  enum class State : int {
+    none,
+    regular,
+    eof
+  };
+
   static const size_t target_size = 512;
 
   std::shared_ptr<std::wstring> text;
   plx::ComPtr<IDWriteTextLayout> layout;
   DWRITE_TEXT_METRICS metrics;
-
-  TextBlock() : text(std::make_shared<std::wstring>()) {
-    set_needs_layout();
+  State state;
+  
+  TextBlock() 
+      : text(std::make_shared<std::wstring>()),
+        state(State::regular) {
   }
 
-  TextBlock(const std::wstring& txt) : text(std::make_shared<std::wstring>(txt)) {
-    set_needs_layout();
+  TextBlock(const std::wstring& txt) 
+      : text(std::make_shared<std::wstring>(txt)),
+        state(State::regular) {
   }
 
-  bool needs_layout() const { return metrics.lineCount == -1; }
-  void set_needs_layout() { metrics.lineCount = -1; }
+  bool needs_layout() const { return layout.Get() == nullptr; }
+  void set_needs_layout() { layout.Reset(); }
+
+  bool eof_block() const { return state == State::eof; }
 };
 
 // The cursor controls where the caret is and has initmate knowledge of the array-of-textblocks
@@ -54,7 +65,15 @@ public:
   Cursor(std::vector<TextBlock>& text) 
       : block_(0), offset_(0), desired_col_(0),
         text_(text) {
-    text_.resize(1);
+  }
+
+  void init() {
+    // The minimal configuration has a regular textblock and the end of file block.
+    if (text_.empty())
+      text_.resize(1);
+    TextBlock tb;
+    tb.state = TextBlock::State::eof;
+    text_.push_back(tb);
   }
 
   uint32_t block_len() const {
@@ -70,7 +89,7 @@ public:
   }
 
   bool is_last_block() const {
-    return block_ >= (text_.size() - 1);
+    return text_[block_ + 1].eof_block();
   }
 
   bool is_first_block() const {
