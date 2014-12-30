@@ -15,7 +15,7 @@
 // 10. find in text
 
 namespace ui_txt {
-  const wchar_t no_file_title[] = L"TExTO v0.0.0a <no file> [F2: open]\n";
+  const wchar_t no_file_title[] = L"TExTO v0.0.0b <no file> [F2: open]\n";
 }
 
 enum class HardFailures {
