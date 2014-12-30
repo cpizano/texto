@@ -759,7 +759,7 @@ public:
                          title_layout_.Get(), brushes_[brush_green].Get());
 
       auto scale = D2D1::Matrix3x2F::Scale(
-          scale_, scale_, D2D1::Point2F(width_ / 2.0f, 0.0f));
+          scale_, scale_, D2D1::Point2F(margin_tl_.x, 0.0f));
       dc->SetTransform(scale);
 
       // draw left margin.
@@ -811,7 +811,7 @@ public:
             dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
             auto debug_rect = 
                 D2D1::RectF(tb.metrics.left, 0, tb.metrics.width, tb.metrics.height);
-            dc->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f);
+            dc->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f / scale_);
             // show space and line breaks.
             draw_marks(dc.Get(), tb.layout.Get());
           }
