@@ -68,6 +68,8 @@ public:
   }
 
   void init() {
+    block_ = 0;
+    offset_ = 0;
     // The minimal configuration has a regular textblock and the end of file block.
     if (text_.empty())
       text_.resize(1);
