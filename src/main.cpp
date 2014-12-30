@@ -670,8 +670,8 @@ public:
     if (first_block_in_view_ == last_block_in_view_)
       return false;
 
-    auto y = (pts.y - margin_tl_.y) / scale_._11  + scroll_v_;
-    auto x = (pts.x / scale_._11) - margin_tl_.x;
+    auto y = (pts.y / scale_._11)  + scroll_v_ - margin_tl_.y;
+    auto x = (pts.x - margin_tl_.x) / scale_._11;
 
     for (uint32_t ix = plx::To<uint32_t>(first_block_in_view_); ix != last_block_in_view_; ++ix) {
       if (text_[ix].metrics.top > y) {
