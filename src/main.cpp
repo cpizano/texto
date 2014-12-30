@@ -566,7 +566,7 @@ public:
     }
     if (command_id == IDC_ALT_FONT) {
       flag_options_[alternate_font].flip();
-      layout_all();
+      invalidate_all();
     }
     if (command_id == IDC_SAVE_PLAINTEXT) {
       PlainTextFileIO ptfio(plx::FilePath(L"c:\\test\\texto_file_out.txt"));
@@ -638,7 +638,7 @@ public:
     }
   }
 
-  void layout_all() {
+  void invalidate_all() {
     for (auto& tb : text_) {
       tb.set_needs_layout();
     }
