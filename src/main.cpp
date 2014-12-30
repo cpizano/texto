@@ -255,7 +255,8 @@ class DCoWindow : public plx::Window <DCoWindow> {
   std::vector<TextBlock> text_;
   Cursor cursor_;
   float scroll_v_;
-  float scale_;
+  //float scale_;
+  D2D1::Matrix3x2F scale_;
 
   size_t first_block_in_view_;
   size_t last_block_in_view_;
@@ -299,7 +300,7 @@ public:
       : width_(width), height_(height),
         cursor_(text_),
         scroll_v_(0.0f),
-        scale_(1.0f),
+        scale_(D2D1::Matrix3x2F::Scale(1.0f, 1.0f)),
         first_block_in_view_(0), last_block_in_view_(0) {
     // $$ read from config.
     margin_tl_ = D2D1::Point2F(22.0f, 36.0f);
@@ -390,7 +391,7 @@ public:
   }
 
   void update_title() {
-    std::wstring title(L"scale: " + std::to_wstring(scale_).substr(0, 4) + L"  ");
+    std::wstring title(L"scale: " + std::to_wstring(scale_._11).substr(0, 4) + L"  ");
     if (!file_path_) {
       title += ui_txt::no_file_title;
     } else {
@@ -506,17 +507,21 @@ public:
   LRESULT mouse_wheel_handler(int16_t offset, int16_t mk) {
     if (mk == MK_CONTROL) {
       // zoom.
+      auto scalar_scale = scale_._11;
       if (offset < 0) {
-        if (scale_ < 0.3f)
+        if (scalar_scale < 0.3f)
           return 0L;
-        scale_ -= 0.1f;
+        scalar_scale -= 0.1f;
       } else if (offset > 0) {
-        if (scale_ > 2.4f)
+        if (scalar_scale > 2.4f)
           return 0L;
-        scale_ += 0.1f;
+        scalar_scale += 0.1f;
       } else {
         return 0L;
       }
+
+      scale_ = D2D1::Matrix3x2F::Scale(
+          scalar_scale, scalar_scale, D2D1::Point2F(margin_tl_.x, 0));
 
       update_title();
       for (auto& tb : text_)
@@ -663,8 +668,8 @@ public:
     if (first_block_in_view_ == last_block_in_view_)
       return false;
 
-    auto y = static_cast<float>(pts.y) + scroll_v_ - margin_tl_.y;
-    auto x = static_cast<float>(pts.x) - margin_tl_.x;
+    auto y = (pts.y - margin_tl_.y) / scale_._11  + scroll_v_;
+    auto x = (pts.x / scale_._11) - margin_tl_.x;
 
     for (uint32_t ix = plx::To<uint32_t>(first_block_in_view_); ix != last_block_in_view_; ++ix) {
       if (text_[ix].metrics.top > y) {
@@ -758,9 +763,7 @@ public:
       dc->DrawTextLayout(D2D1::Point2F(margin_tl_.x, widget_pos_.y - widget_radius_.y),
                          title_layout_.Get(), brushes_[brush_green].Get());
 
-      auto scale = D2D1::Matrix3x2F::Scale(
-          scale_, scale_, D2D1::Point2F(margin_tl_.x, 0.0f));
-      dc->SetTransform(scale);
+      dc->SetTransform(scale_);
 
       // draw left margin.
       dc->DrawLine(D2D1::Point2F(margin_tl_.x, margin_tl_.y),
@@ -769,7 +772,8 @@ public:
 
       // draw the start of text line marker.
       if (scroll_v_ < 0) {
-        dc->SetTransform(D2D1::Matrix3x2F::Translation(margin_tl_.x, margin_tl_.y - scroll_v_) * scale);
+        dc->SetTransform(D2D1::Matrix3x2F::Translation(
+            margin_tl_.x, margin_tl_.y - scroll_v_) * scale_);
         dc->DrawLine(D2D1::Point2F(0.0f, -8.0f),
                      D2D1::Point2F(static_cast<float>(width_), -8.0f),
                      brushes_[brush_blue].Get(), 0.5f);
@@ -778,7 +782,7 @@ public:
       // draw contents.
       float bottom = 0.0f;
       auto v_min = scroll_v_;
-      auto v_max = scroll_v_ + static_cast<float>(height_) / scale_;
+      auto v_max = scroll_v_ + static_cast<float>(height_) / scale_._11;
 
       uint32_t block_number = 0;
       bool painting = false;
@@ -802,7 +806,7 @@ public:
 
           auto trans = D2D1::Matrix3x2F::Translation(margin_tl_.x,
                                                      tb.metrics.top + margin_tl_.y - scroll_v_);
-          dc->SetTransform(trans * scale);
+          dc->SetTransform(trans * scale_);
           
           dc->DrawTextLayout(D2D1::Point2F(), tb.layout.Get(), brushes_[brush_text].Get());
 
@@ -811,7 +815,7 @@ public:
             dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
             auto debug_rect = 
                 D2D1::RectF(tb.metrics.left, 0, tb.metrics.width, tb.metrics.height);
-            dc->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f / scale_);
+            dc->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f / scale_._11);
             // show space and line breaks.
             draw_marks(dc.Get(), tb.layout.Get());
           }
