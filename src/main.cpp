@@ -403,6 +403,14 @@ public:
     update_title(title);
   }
 
+  void clipboard_copy() {
+
+  }
+
+  void clipboard_paste() {
+
+  }
+
   LRESULT message_handler(const UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
       case WM_DESTROY: {
@@ -470,12 +478,32 @@ public:
     update_screen();
     return 0L;
   }
+
+  LRESULT ctrl_handler(wchar_t code) {
+    switch (code) {
+      case 0x03 :                 // ctrl-c.
+        clipboard_copy();
+        break;
+      case 0x08 :                 // backspace.
+        add_character(0x08);
+        break;
+      case 0x0A :                 // line feed.
+      case 0x0D :                 // carriage return.
+        add_character('\n');
+        break;
+      case 0x16:                  // ctrl-v.
+        clipboard_paste();
+        break;
+      default:
+        ; // $$$ beep or flash.
+    }
+    return 0L;
+  }
     
   LRESULT char_handler(wchar_t code) {
-    if (code == 0x0D)
-      add_character('\n');
-    else
-      add_character(code);
+    if (code < 0x20)
+      return ctrl_handler(code);
+    add_character(code);
     return 0L;
   }
 
