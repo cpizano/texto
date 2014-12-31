@@ -748,6 +748,20 @@ public:
     }
   }
 
+  void draw_caret(ID2D1DeviceContext* dc, IDWriteTextLayout* tl) {
+    auto aa_mode = dc->GetAntialiasMode();
+    dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+    DWRITE_HIT_TEST_METRICS hit_metrics;
+    float x, y;
+    auto hr = tl->HitTestTextPosition(cursor_.current_offset(), FALSE, &x, &y, &hit_metrics);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+    dc->DrawRectangle(
+        D2D1::RectF(x, y, x + 2.0f, y + hit_metrics.height),
+        brushes_[brush_red].Get());
+    dc->SetAntialiasMode(aa_mode);
+  }
+
   void update_screen() {
     {
       ScopedDraw sd(root_surface_, dpi_);
@@ -818,16 +832,7 @@ public:
           }
           if (cursor_.block_number() == block_number) {
             // draw caret since it is visible.
-            dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
-            DWRITE_HIT_TEST_METRICS hit_metrics;
-            float x, y;
-            auto hr = tb.layout->HitTestTextPosition(
-                cursor_.current_offset(), FALSE, &x, &y, &hit_metrics);
-            if (hr != S_OK)
-              throw plx::ComException(__LINE__, hr);
-            dc->DrawRectangle(
-                D2D1::RectF(x, y, x + 2.0f, y + hit_metrics.height),
-                brushes_[brush_red].Get());
+            draw_caret(dc.Get(), tb.layout.Get());
           }
         } else if (painting) {
           // we went outside of the viewport, no need to do more work right now.
