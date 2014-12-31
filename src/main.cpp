@@ -450,18 +450,18 @@ public:
         ::Beep(440, 10);
         return 0L;
       }
-    }
-    if (vkey == VK_RIGHT) {
+    } else if (vkey == VK_RIGHT) {
       if (!cursor_.move_right()) {
         ::Beep(440, 10);
         return 0L;
       }
-    }
-    if (vkey == VK_UP) {
+    } else if (vkey == VK_UP) {
       cursor_.move_up();
     }
-    if (vkey == VK_DOWN) {
+    else if (vkey == VK_DOWN) {
       cursor_.move_down();
+    } else {
+      return 0L;
     }
 
     ensure_cursor_in_view();
