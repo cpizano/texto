@@ -287,6 +287,7 @@ class DCoWindow : public plx::Window <DCoWindow> {
     brush_blue,
     brush_green,
     brush_text,
+    brush_sline,
     brush_last
   };
   plx::ComPtr<ID2D1SolidColorBrush> brushes_[brush_last];
@@ -373,8 +374,10 @@ public:
           brushes_[brush_blue].GetAddressOf());
       dc->CreateSolidColorBrush(D2D1::ColorF(RGB(74, 174, 0), 1.0),
           brushes_[brush_green].GetAddressOf());
-      dc->CreateSolidColorBrush(D2D1::ColorF(RGB(57, 135, 214), 1.0f), 
+      dc->CreateSolidColorBrush(D2D1::ColorF(0xD68739, 1.0f), 
           brushes_[brush_text].GetAddressOf());
+      dc->CreateSolidColorBrush(D2D1::ColorF(0xD68739, 0.1f),
+          brushes_[brush_sline].GetAddressOf());
     }
     
     cursor_.init();
@@ -756,10 +759,14 @@ public:
     auto hr = tl->HitTestTextPosition(cursor_.current_offset(), FALSE, &x, &y, &hit_metrics);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
+    auto yf = y + hit_metrics.height;
+    // caret.
     dc->DrawRectangle(
-        D2D1::RectF(x, y, x + 2.0f, y + hit_metrics.height),
-        brushes_[brush_red].Get());
+        D2D1::RectF(x, y, x + 2.0f, yf), brushes_[brush_red].Get(), 1.0f / scale_._11);
     dc->SetAntialiasMode(aa_mode);
+    // active line.
+    dc->FillRectangle(
+        D2D1::RectF(0, y, static_cast<float>(width_), yf), brushes_[brush_sline].Get());
   }
 
   void update_screen() {
