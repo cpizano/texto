@@ -259,7 +259,6 @@ class DCoWindow : public plx::Window <DCoWindow> {
   D2D1::Matrix3x2F scale_;
 
   size_t first_block_in_view_;
-  size_t last_block_in_view_;
 
   plx::ComPtr<ID3D11Device> d3d_device_;
   plx::ComPtr<ID2D1Factory2> d2d_factory_;
@@ -301,7 +300,7 @@ public:
         cursor_(text_),
         scroll_v_(0.0f),
         scale_(D2D1::Matrix3x2F::Scale(1.0f, 1.0f)),
-        first_block_in_view_(0), last_block_in_view_(0) {
+        first_block_in_view_(0) {
     // $$ read from config.
     margin_tl_ = D2D1::Point2F(22.0f, 36.0f);
     margin_br_ = D2D1::Point2F(16.0f, 16.0f);
@@ -667,13 +666,10 @@ public:
   }
 
   bool move_cursor(POINTS pts) {
-    if (first_block_in_view_ == last_block_in_view_)
-      return false;
-
     auto y = (pts.y / scale_._11)  + scroll_v_ - margin_tl_.y;
     auto x = (pts.x - margin_tl_.x) / scale_._11;
 
-    for (uint32_t ix = plx::To<uint32_t>(first_block_in_view_); ix != last_block_in_view_; ++ix) {
+    for (auto ix = first_block_in_view_; ix != text_.size(); ++ix) {
       if (text_[ix].metrics.top > y) {
         if (ix == 0) {
           //$$ handle hits above start of text.
@@ -697,7 +693,7 @@ public:
           __debugbreak();
         // if the hit is in an actual glyph, |inside| is true but anyhow we want to position
         // the cursor at the end of the line which |hit_metrics| returns.
-        cursor_.move_to(ix, hit_metrics.textPosition);
+        cursor_.move_to(plx::To<uint32_t>(ix), hit_metrics.textPosition);
         return true;
       }
     }
@@ -839,7 +835,6 @@ public:
         }
         ++block_number;
       }
-      last_block_in_view_ = block_number;
     }
     dco_device_->Commit();
   }
