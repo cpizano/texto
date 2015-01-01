@@ -768,7 +768,7 @@ public:
     return false;
   }
 
-  void draw_marks(ID2D1DeviceContext* dc, IDWriteTextLayout* tl) {
+  void draw_marks(ID2D1DeviceContext* dc, IDWriteTextLayout* tl, const wchar_t* text) {
     uint32_t count = 0;
     auto hr = tl->GetClusterMetrics(nullptr,  0, &count);
     if (hr == S_OK)
@@ -797,9 +797,22 @@ public:
         x_offset = 1.0f;
       } else if (cm.isWhitespace) {
         brush = brushes_[brush_blue].Get();
-        width = 1.0f;
         height = 1.0f;
-        x_offset = cm.width / 3.0f;
+        if (cm.width == 0) {
+          // control char (rare, possibly a bug).
+          brush = brushes_[brush_green].Get();
+          width = 2.0f;
+          height = -5.0f;
+          x_offset = cm.width / 3.0f;
+        } else if (text[offset] == L'\t') {
+          // tab.
+          x_offset = cm.width / 8.0f;
+          width = cm.width - (2 * x_offset); 
+        } else {
+          // space.
+          width = 1.0f;
+          x_offset = cm.width / 3.0f;
+        }
       }
 
       if (brush) {
@@ -900,7 +913,7 @@ public:
                 D2D1::RectF(tb.metrics.left, 0, tb.metrics.width, tb.metrics.height);
             dc->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f / scale_._11);
             // show space and line breaks.
-            draw_marks(dc.Get(), tb.layout.Get());
+            draw_marks(dc.Get(), tb.layout.Get(), tb.text->c_str());
           }
           if (cursor_.block_number() == block_number) {
             // draw caret since it is visible.
