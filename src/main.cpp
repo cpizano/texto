@@ -3,16 +3,18 @@
 #include "texto.h"
 
 // Ideas
-// 1.  Modified text (like VS ide) side column marker
-// 2.  Column guides (80 cols, etc)
-// 3.  Dropbox folder aware
-// 4.  Number of lines
-// 5.  darken the entire line of the cursor
+// 1.  modified text (like VS ide) side column marker
+// 2.  column guides (80 cols, etc)
+// 3.  dropbox folder aware
+// 4.  number of lines
 // 6.  be more permissive with the utf16 conversion
 // 7.  don't scroll past the top or bottom
 // 8.  save to input file
 // 9.  spellchecker
 // 10. find in text
+// 11. text selection
+// 12. impl copy
+// 13. text stats above text.
 
 namespace ui_txt {
   const wchar_t no_file_title[] = L"TExTO v0.0.0b <no file> [F2: open]\n";
@@ -248,7 +250,7 @@ class DCoWindow : public plx::Window <DCoWindow> {
   float scroll_v_;
   //float scale_;
   D2D1::Matrix3x2F scale_;
-
+  // speeds up hit testing.
   size_t first_block_in_view_;
 
   plx::ComPtr<ID3D11Device> d3d_device_;
@@ -258,11 +260,11 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<IDCompositionTarget> dco_target_;
   plx::ComPtr<IDCompositionVisual2> root_visual_;
   plx::ComPtr<IDCompositionSurface> root_surface_;
+  plx::ComPtr<IDWriteFactory> dwrite_factory_;
 
+  // widgets.
   plx::ComPtr<ID2D1Geometry> circle_geom_move_;
   plx::ComPtr<ID2D1Geometry> circle_geom_close_;
-
-  plx::ComPtr<IDWriteFactory> dwrite_factory_;
 
   enum TxtFromat {
     fmt_mono_text,
@@ -328,8 +330,8 @@ public:
     // allocate the gpu surface and bind it to the root visual.
     root_surface_ = plx::CreateDCoSurface(
         dco_device_,
-        static_cast<unsigned int>(dpi_.to_physical_x(width_)),
-        static_cast<unsigned int>(dpi_.to_physical_x(height_)));
+        static_cast<unsigned int>(dpi().to_physical_x(width_)),
+        static_cast<unsigned int>(dpi().to_physical_x(height_)));
     hr = root_visual_->SetContent(root_surface_.Get());
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
@@ -353,7 +355,7 @@ public:
     text_fmt_[fmt_title_right]->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
 
     {
-      ScopedDraw sd(root_surface_, dpi_);
+      ScopedDraw sd(root_surface_, dpi());
       auto dc = sd.begin(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.9f), zero_offset);
 
       // create solid brushes.
@@ -466,7 +468,7 @@ public:
       }
     }
 
-    return ::DefWindowProc(window_, message, wparam, lparam);
+    return ::DefWindowProc(window(), message, wparam, lparam);
   }
 
   void paint_handler() {
@@ -592,15 +594,15 @@ public:
   LRESULT dpi_changed_handler(LPARAM lparam) {
     // $$ test this.
     plx::RectL r(plx::SizeL(
-          static_cast<long>(dpi_.to_physical_x(width_)),
-          static_cast<long>(dpi_.to_physical_x(height_))));
+          static_cast<long>(dpi().to_physical_x(width_)),
+          static_cast<long>(dpi().to_physical_x(height_))));
     
     auto suggested = reinterpret_cast<const RECT*> (lparam);
     ::AdjustWindowRectEx(&r, 
-        ::GetWindowLong(window_, GWL_STYLE),
+        ::GetWindowLong(window(), GWL_STYLE),
         FALSE,
-        ::GetWindowLong(window_, GWL_EXSTYLE));
-    ::SetWindowPos(window_, nullptr, suggested->left, suggested->top,
+        ::GetWindowLong(window(), GWL_EXSTYLE));
+    ::SetWindowPos(window(), nullptr, suggested->left, suggested->top,
                    r.width(), r.height(),
                    SWP_NOACTIVATE | SWP_NOZORDER);
     return 0L;
@@ -639,7 +641,6 @@ public:
 
   void add_character(wchar_t ch) {
     bool needs_layout = false;
-
     auto& block = cursor_.current_block();
     if (ch == '\n') {
       // new line.
@@ -671,13 +672,6 @@ public:
     auto box = D2D1::SizeF(
         static_cast<float>(width_) - margin_tl_.x - margin_br_.x,
         static_cast<float>(height_)- margin_tl_.y - margin_tl_.y);
-
-#if 0
-    // this causes us to render more when zoomed out, or less when zoomed in.
-    box.width /= scale_;
-    box.height /= scale_;
-#endif
-
     plx::Range<const wchar_t> txt(block.text->c_str(), block.text->size());
     auto fmt_index = flag_options_[alternate_font] ? 1 : 0;
     block.layout = plx::CreateDWTextLayout(dwrite_factory_, text_fmt_[fmt_index], txt, box);
@@ -831,7 +825,7 @@ public:
 
   void update_screen() {
     {
-      ScopedDraw sd(root_surface_, dpi_);
+      ScopedDraw sd(root_surface_, dpi());
       auto bk_alpha = flag_options_[opacity_50_percent] ? 0.5f : 0.9f;
       auto dc = sd.begin(D2D1::ColorF(0x000000, bk_alpha), zero_offset);
       // draw widgets.
@@ -879,13 +873,11 @@ public:
           // in view, paint it.
           if (!painting)
             first_block_in_view_ = block_number;
-
           painting = true;
 
           auto trans = D2D1::Matrix3x2F::Translation(margin_tl_.x,
                                                      tb.metrics.top + margin_tl_.y - scroll_v_);
           dc->SetTransform(trans * scale_);
-          
           dc->DrawTextLayout(D2D1::Point2F(), tb.layout.Get(), brushes_[brush_text].Get());
 
           // debugging visual aids.
