@@ -192,41 +192,14 @@ public:
       block_to_disk(file, content);
   }
 
-  void load(std::vector<TextBlock>& text) {
+  void load(Cursor& cursor) {
     auto file = plx::File::Create(
         path_, 
         plx::FileParams::ReadWrite_SharedRead(OPEN_EXISTING),
         plx::FileSecurity());
-
     // need to read the whole file at once because the UTF16 conversion fails if
-    // we end up in the middle of multi-byte sequence.
-    const std::wstring fulltext = file_from_disk(file);
-
-    size_t brk = 0;
-    size_t start = 0;
-
-    while (true) {
-      brk = fulltext.find_first_of(L'\n', brk);
-
-      if (brk == std::wstring::npos) {
-        // last block.
-        text.emplace_back(fulltext.substr(start, brk));
-        return;
-      }
-
-      auto sz = brk - start;
-      if (sz < TextBlock::target_size) {
-        // current block size is small, advance half the difference.
-        auto offset = TextBlock::target_size - sz;
-        brk += (offset > 20) ? offset / 2 : 10;
-        continue;
-      }
-
-      text.emplace_back(fulltext.substr(start, sz));
-      start = brk + 1;
-      ++brk;
-    }
-
+    // we end up trying to convert in the middle of multi-byte sequence.
+    cursor.add_string(file_from_disk(file), false);
   }
 
 private:
@@ -438,12 +411,21 @@ public:
     if (!data)
       return false;
     std::wstring str(data);
-    if (str.size() < 200) {
-      for (wchar_t c : str)
-        cursor_.insert_char(c);
-      cursor_.current_block().set_needs_layout();
-      update_screen();
+
+    // remove CRs.
+    auto last = std::remove(begin(str), end(str), L'\r');
+    str.erase(last, end(str));
+    
+    // replace other control chars with ctrl-z
+    for (wchar_t& c : str) {
+      if (c >= 0x20)
+        continue;
+      if (c != L'\n')
+        c = 0x1A;
     }
+
+    cursor_.add_string(str, true);
+    update_screen();
     ::GlobalUnlock(gmem);
     return true;
   }
@@ -645,7 +627,7 @@ public:
         return 0L;
       text_.clear();
       PlainTextFileIO ptfio(dialog.path());
-      ptfio.load(text_);
+      ptfio.load(cursor_);
       cursor_.init();
       file_path_ = std::make_unique<plx::FilePath>(dialog.path());
       update_title();

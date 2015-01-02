@@ -159,6 +159,73 @@ public:
     ++offset_;
   }
 
+  std::wstring insert_run(const std::wstring& str) {
+    current_block().set_needs_layout();
+    auto txt = current_block().text;
+    auto prev_offset = offset_;
+    // no matter what, we are going to create a new block and move
+    // the cursor over there.
+    ++block_;
+    text_.insert(begin(text_) + block_, TextBlock());
+    offset_ = 0;
+
+    if (txt->empty()) {
+      *txt = str;
+      return std::wstring();
+    } else {
+      auto leftover = txt->substr(prev_offset, std::wstring::npos);
+      txt->erase(prev_offset, leftover.size());
+      txt->append(str);
+      return leftover;
+    }
+  }
+
+  void add_string(const std::wstring& str, bool use_insert) {
+    size_t brk = 0;
+    size_t start = 0;
+    std::wstring first_block_leftover;
+
+    size_t insert_count = 0;
+    while (true) {
+      brk = str.find_first_of(L'\n', brk);
+
+      if (brk == std::wstring::npos) {
+        // last block.
+        if (use_insert) {
+          if (insert_count == 0) {
+            current_block().text->insert(offset_, str);
+            current_block().set_needs_layout();
+          } else {
+            insert_run(str.substr(start, brk) + first_block_leftover);
+          }
+        } else {
+          text_.emplace_back(str.substr(start, brk));
+        }
+        return;
+      }
+
+      auto sz = brk - start;
+      if (sz < TextBlock::target_size) {
+        // input block size is small, advance half the difference.
+        auto offset = TextBlock::target_size - sz;
+        brk += (offset > 20) ? offset / 2 : 10;
+        continue;
+      } 
+
+      // good enough size, add text as a new block.
+      if (use_insert) {
+        if (insert_count++ == 0)
+          first_block_leftover = insert_run(str.substr(start, sz));
+        else
+          insert_run(str.substr(start, sz));
+      } else {
+        text_.emplace_back(str.substr(start, sz));
+      }
+      start = brk + 1;
+      ++brk;
+    }
+  }
+
   bool remove_char() {
     if (!block_len())
       return remove_block();
