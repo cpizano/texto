@@ -94,24 +94,6 @@ public:
 
 const D2D1_SIZE_F zero_offset = {0};
 
-class ScopedClipboard {
-  bool is_open_;
-
-public:
-  explicit ScopedClipboard(HWND window) {
-    is_open_ = ::OpenClipboard(window) == TRUE;
-  }
-
-  bool did_open() const {
-    return is_open_;
-  }
-
-  ~ScopedClipboard() {
-    if (is_open_)
-      ::CloseClipboard();
-  }
-};
-
 class ScopedDraw {
   bool drawing_;
   plx::ComPtr<IDCompositionSurface> ics_;
@@ -403,7 +385,7 @@ public:
   bool clipboard_paste() {
     if (!::IsClipboardFormatAvailable(CF_TEXT))
       return false;
-    ScopedClipboard clipboard(window());
+    plx::ScopedClipboard clipboard(window());
     if (!clipboard.did_open())
       return false;
     auto gmem = ::GetClipboardData(CF_UNICODETEXT);
