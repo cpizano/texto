@@ -11,6 +11,16 @@
 // notepad and probably a worse Notepad++.
 
 
+// Offsets to text that is selected. Not meaniful without a TextBlock.
+struct Selection {
+  uint32_t start;
+  uint32_t end;
+
+  Selection(): start(0), end(0) {}
+  bool is_empty() const { return start == end; }
+  void clear() { start = end = 0; }
+};
+
 // A TextBlock is chunck of text that is rendered in a rectangle. What the user sees on screen
 // is a series of TextBlocks one afer another with no overlap between them. It exists because it
 // is not reasonable to store the text as a single string and on the other hand the DirectWrite API
@@ -35,6 +45,7 @@ struct TextBlock {
   plx::ComPtr<IDWriteTextLayout> layout;
   DWRITE_TEXT_METRICS metrics;
   State state;
+  Selection selection;
   
   TextBlock() 
       : text(std::make_shared<std::wstring>()),
@@ -52,6 +63,7 @@ struct TextBlock {
   bool eof_block() const { return state == State::eof; }
 };
 
+
 // The cursor controls where the caret is and has initmate knowledge of the array-of-textblocks
 // and encapsulates all the nasty corner cases of managing the cursor movement and text insertion
 // and deletion.
@@ -59,6 +71,7 @@ class Cursor {
   uint32_t block_;
   uint32_t offset_;
   uint32_t desired_col_;
+  std::vector<uint32_t> sel_blocks_;
   std::vector<TextBlock>& text_;
 
 public:
@@ -235,6 +248,31 @@ public:
       return false;
     else 
       return move_block_up();
+  }
+
+  // make the char at the cursor selected.
+  wchar_t select() {
+    if (!block_len())
+      return 0;
+    if (offset_ == block_len())
+      return 0;
+
+    clear_selection();
+    auto& cb = current_block();
+    cb.selection.start = offset_;
+    cb.selection.end = offset_ + 1;
+    sel_blocks_.push_back(block_number());
+
+    return cb.text->at(offset_);
+  }
+
+  Selection selection() const {
+    return current_block().selection;
+  }
+
+  void clear_selection() {
+    for (auto ix : sel_blocks_)
+      text_[ix].selection.clear();
   }
 
 private:

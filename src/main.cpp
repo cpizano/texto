@@ -218,6 +218,7 @@ class DCoWindow : public plx::Window <DCoWindow> {
     brush_green,
     brush_text,
     brush_sline,
+    brush_sel,
     brush_last
   };
   plx::ComPtr<ID2D1SolidColorBrush> brushes_[brush_last];
@@ -310,6 +311,8 @@ public:
           brushes_[brush_text].GetAddressOf());
       dc()->CreateSolidColorBrush(D2D1::ColorF(0xD68739, 0.1f),
           brushes_[brush_sline].GetAddressOf());
+      dc()->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::LightGray, 0.8f),
+          brushes_[brush_sel].GetAddressOf());
     }
     
     cursor_.init();
@@ -398,6 +401,9 @@ public:
       }
       case WM_LBUTTONUP: {
         return left_mouse_button_handler(false, MAKEPOINTS(lparam));
+      }
+      case WM_LBUTTONDBLCLK: {
+        return left_mouse_dblclick_handler(MAKEPOINTS(lparam));
       }
       case WM_MOUSEWHEEL: {
         return mouse_wheel_handler(HIWORD(wparam), LOWORD(wparam));
@@ -488,6 +494,13 @@ public:
         ::PostQuitMessage(0);
       }
     }
+    return 0L;
+  }
+
+  LRESULT left_mouse_dblclick_handler(POINTS pts) {
+    wchar_t ch = cursor_.select();
+    if (ch)
+      update_screen();
     return 0L;
   }
 
@@ -677,6 +690,7 @@ public:
         // if the hit is in an actual glyph, |inside| is true but anyhow we want to position
         // the cursor at the end of the line which |hit_metrics| returns.
         cursor_.move_to(plx::To<uint32_t>(ix), hit_metrics.textPosition);
+        cursor_.clear_selection();
         return true;
       }
     }
@@ -760,6 +774,25 @@ public:
     // active line.
     dc->FillRectangle(
         D2D1::RectF(0, y, static_cast<float>(width_), yf), brushes_[brush_sline].Get());
+    dc->SetAntialiasMode(aa_mode);
+  }
+
+  void draw_selection(ID2D1DeviceContext* dc, IDWriteTextLayout* tl, Selection& sel) {
+    if (sel.is_empty())
+      return;
+    auto aa_mode = dc->GetAntialiasMode();
+    dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+    DWRITE_HIT_TEST_METRICS hit_metrics;
+    float x0, y0;
+    auto hr = tl->HitTestTextPosition(sel.start, FALSE, &x0, &y0, &hit_metrics);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+    auto y1 = y0 + hit_metrics.height;
+    auto x1 = x0 + hit_metrics.width;
+    // active line.
+    dc->FillRectangle(
+        D2D1::RectF(x0, y0, x1, y1), brushes_[brush_sel].Get());
+    dc->SetAntialiasMode(aa_mode);
   }
 
   void update_screen() {
@@ -817,6 +850,8 @@ public:
           auto trans = D2D1::Matrix3x2F::Translation(margin_tl_.x,
                                                      tb.metrics.top + margin_tl_.y - scroll_v_);
           dc()->SetTransform(trans * scale_);
+          draw_selection(dc(), tb.layout.Get(), tb.selection);
+
           dc()->DrawTextLayout(D2D1::Point2F(), tb.layout.Get(), brushes_[brush_text].Get());
 
           // debugging visual aids.

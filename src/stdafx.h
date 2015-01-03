@@ -1473,7 +1473,7 @@ protected:
     wcex.hCursor = ::LoadCursor(nullptr, IDC_ARROW);
     wcex.hInstance = reinterpret_cast<HINSTANCE>(&__ImageBase);
     wcex.lpszClassName = L"PlexWindowClass";
-    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
     wcex.lpfnWndProc = WndProc;
     wcex.hIcon = icon;
     wcex.hIconSm = small_icon;
