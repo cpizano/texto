@@ -94,37 +94,6 @@ public:
 
 const D2D1_SIZE_F zero_offset = {0};
 
-class ScopedDraw {
-  bool drawing_;
-  plx::ComPtr<IDCompositionSurface> ics_;
-  const plx::DPI& dpi_;
-
-public:
-  ScopedDraw(plx::ComPtr<IDCompositionSurface> ics,
-             const plx::DPI& dpi) 
-    : drawing_(false),
-      ics_(ics),
-      dpi_(dpi) {
-  }
-
-  ~ScopedDraw() {
-    end();
-  }
-
-  plx::ComPtr<ID2D1DeviceContext> begin(const D2D1_COLOR_F& clear_color,
-                                        const D2D1_SIZE_F& offset) {
-    auto dc = plx::CreateDCoDeviceCtx(ics_, dpi_, offset);
-    dc->Clear(clear_color);
-    drawing_ = true;
-    return dc;
-  }
-
-  void end() {
-    if (drawing_)
-      ics_->EndDraw();
-  }
-};
-
 plx::ComPtr<ID2D1Geometry> CreateD2D1Geometry(
     plx::ComPtr<ID2D1Factory2> d2d1_factory,
     const D2D1_ELLIPSE& ellipse) {
@@ -337,21 +306,19 @@ public:
     text_fmt_[fmt_title_right]->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
 
     {
-      ScopedDraw sd(root_surface_, dpi());
-      auto dc = sd.begin(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.9f), zero_offset);
-
+      plx::ScopedD2D1DeviceContext dc(root_surface_, zero_offset, dpi(), nullptr);
       // create solid brushes.
-      dc->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black, 1.0f), 
+      dc()->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black, 1.0f), 
           brushes_[brush_black].GetAddressOf());
-      dc->CreateSolidColorBrush(D2D1::ColorF(0xBD4B5B, 1.0f), 
+      dc()->CreateSolidColorBrush(D2D1::ColorF(0xBD4B5B, 1.0f), 
           brushes_[brush_red].GetAddressOf());
-      dc->CreateSolidColorBrush(D2D1::ColorF(0x1E5D81, 1.0f), 
+      dc()->CreateSolidColorBrush(D2D1::ColorF(0x1E5D81, 1.0f), 
           brushes_[brush_blue].GetAddressOf());
-      dc->CreateSolidColorBrush(D2D1::ColorF(RGB(74, 174, 0), 1.0),
+      dc()->CreateSolidColorBrush(D2D1::ColorF(RGB(74, 174, 0), 1.0),
           brushes_[brush_green].GetAddressOf());
-      dc->CreateSolidColorBrush(D2D1::ColorF(0xD68739, 1.0f), 
+      dc()->CreateSolidColorBrush(D2D1::ColorF(0xD68739, 1.0f), 
           brushes_[brush_text].GetAddressOf());
-      dc->CreateSolidColorBrush(D2D1::ColorF(0xD68739, 0.1f),
+      dc()->CreateSolidColorBrush(D2D1::ColorF(0xD68739, 0.1f),
           brushes_[brush_sline].GetAddressOf());
     }
     
@@ -807,28 +774,28 @@ public:
 
   void update_screen() {
     {
-      ScopedDraw sd(root_surface_, dpi());
-      auto bk_alpha = flag_options_[opacity_50_percent] ? 0.5f : 0.9f;
-      auto dc = sd.begin(D2D1::ColorF(0x000000, bk_alpha), zero_offset);
+      D2D1::ColorF bk_color(0x000000, flag_options_[opacity_50_percent] ? 0.5f : 0.9f);
+      plx::ScopedD2D1DeviceContext dc(root_surface_, zero_offset, dpi(), &bk_color);
+      
       // draw widgets.
-      dc->DrawGeometry(circle_geom_move_.Get(), brushes_[brush_blue].Get(), 4.0f);
-      dc->DrawGeometry(circle_geom_close_.Get(), brushes_[brush_red].Get(), 4.0f);
+      dc()->DrawGeometry(circle_geom_move_.Get(), brushes_[brush_blue].Get(), 4.0f);
+      dc()->DrawGeometry(circle_geom_close_.Get(), brushes_[brush_red].Get(), 4.0f);
       // draw title.
-      dc->DrawTextLayout(D2D1::Point2F(margin_tl_.x, widget_pos_.y - widget_radius_.y),
+      dc()->DrawTextLayout(D2D1::Point2F(margin_tl_.x, widget_pos_.y - widget_radius_.y),
                          title_layout_.Get(), brushes_[brush_green].Get());
 
-      dc->SetTransform(scale_);
+      dc()->SetTransform(scale_);
 
       // draw left margin.
-      dc->DrawLine(D2D1::Point2F(margin_tl_.x, margin_tl_.y),
+      dc()->DrawLine(D2D1::Point2F(margin_tl_.x, margin_tl_.y),
                    D2D1::Point2F(margin_tl_.x, height_ - margin_br_.y),
                    brushes_[brush_blue].Get(), 0.5f);
 
       // draw the start of text line marker.
       if (scroll_v_ < 0) {
-        dc->SetTransform(D2D1::Matrix3x2F::Translation(
+        dc()->SetTransform(D2D1::Matrix3x2F::Translation(
             margin_tl_.x, margin_tl_.y - scroll_v_) * scale_);
-        dc->DrawLine(D2D1::Point2F(0.0f, -8.0f),
+        dc()->DrawLine(D2D1::Point2F(0.0f, -8.0f),
                      D2D1::Point2F(static_cast<float>(width_), -8.0f),
                      brushes_[brush_blue].Get(), 0.5f);
       }
@@ -859,21 +826,21 @@ public:
 
           auto trans = D2D1::Matrix3x2F::Translation(margin_tl_.x,
                                                      tb.metrics.top + margin_tl_.y - scroll_v_);
-          dc->SetTransform(trans * scale_);
-          dc->DrawTextLayout(D2D1::Point2F(), tb.layout.Get(), brushes_[brush_text].Get());
+          dc()->SetTransform(trans * scale_);
+          dc()->DrawTextLayout(D2D1::Point2F(), tb.layout.Get(), brushes_[brush_text].Get());
 
           // debugging visual aids.
           if (flag_options_[debug_text_boxes]) {
-            dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+            dc()->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
             auto debug_rect = 
                 D2D1::RectF(tb.metrics.left, 0, tb.metrics.width, tb.metrics.height);
-            dc->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f / scale_._11);
+            dc()->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f / scale_._11);
             // show space and line breaks.
-            draw_marks(dc.Get(), tb.layout.Get(), tb.text->c_str());
+            draw_marks(dc(), tb.layout.Get(), tb.text->c_str());
           }
           if (cursor_.block_number() == block_number) {
             // draw caret since it is visible.
-            draw_caret(dc.Get(), tb.layout.Get());
+            draw_caret(dc(), tb.layout.Get());
           }
         } else if (painting) {
           // we went outside of the viewport, no need to do more work right now.
