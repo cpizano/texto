@@ -104,20 +104,6 @@ plx::ComPtr<ID2D1Geometry> CreateD2D1Geometry(
   return geometry;
 }
 
-plx::ComPtr<IDWriteTextFormat> CreateDWriteTextFormat(
-    plx::ComPtr<IDWriteFactory> dw_factory,
-    const wchar_t* font_family, float size,
-    DWRITE_FONT_WEIGHT weight = DWRITE_FONT_WEIGHT_NORMAL,
-    DWRITE_FONT_STYLE style = DWRITE_FONT_STYLE_NORMAL,
-    DWRITE_FONT_STRETCH stretch = DWRITE_FONT_STRETCH_NORMAL) {
-  plx::ComPtr<IDWriteTextFormat> format;
-  auto hr = dw_factory->CreateTextFormat(
-      font_family, nullptr, weight, style, stretch, size, L"", format.GetAddressOf());
-  if (hr != S_OK)
-    throw plx::ComException(__LINE__, hr);
-  return format;
-}
-
 class PlainTextFileIO {
   const plx::FilePath path_;
   const size_t io_size = 32 * 1024;
@@ -296,11 +282,15 @@ public:
         D2D1::Ellipse(D2D1::Point2F(width_ - widget_pos_.x , widget_pos_.y),
                       widget_radius_.x, widget_radius_.y));
 
-    // create fonts.
     dwrite_factory_ = plx::CreateDWriteFactory();
-    text_fmt_[fmt_mono_text] = CreateDWriteTextFormat(dwrite_factory_, L"Consolas", 14.0f);
-    text_fmt_[fmt_prop_large] = CreateDWriteTextFormat(dwrite_factory_, L"Candara", 20.0f);
-    text_fmt_[fmt_title_right] = CreateDWriteTextFormat(dwrite_factory_, L"Consolas", 12.0f);
+    // create fonts.
+    auto normal_sytle = plx::FontWSSParams::MakeNormal();
+    text_fmt_[fmt_mono_text] =
+        plx::CreateDWriteSystemTextFormat(dwrite_factory_, L"Consolas", 14.0f, normal_sytle);
+    text_fmt_[fmt_prop_large] =
+        plx::CreateDWriteSystemTextFormat(dwrite_factory_, L"Candara", 20.0f, normal_sytle);
+    text_fmt_[fmt_title_right] =
+        plx::CreateDWriteSystemTextFormat(dwrite_factory_, L"Consolas", 12.0f, normal_sytle);
 
     text_fmt_[fmt_title_right]->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
     text_fmt_[fmt_title_right]->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);

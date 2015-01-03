@@ -142,6 +142,19 @@ ItRange<uint16_t*> RangeFromString(std::wstring& str) {
   auto s = reinterpret_cast<uint16_t*>(&str.front());
   return ItRange<uint16_t*>(s, s + str.size());
 }
+plx::ComPtr<IDWriteTextFormat> CreateDWriteSystemTextFormat(
+    plx::ComPtr<IDWriteFactory> dw_factory,
+    const wchar_t* font_family, float size,
+    const plx::FontWSSParams& params) {
+  plx::ComPtr<IDWriteTextFormat> format;
+  auto hr = dw_factory->CreateTextFormat(font_family, nullptr,
+                                         params.weight, params.style, params.stretch,
+                                         size, L"",
+                                         format.GetAddressOf());
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+  return format;
+}
 plx::FilePath GetAppDataPath(bool roaming) {
   auto folder = roaming? FOLDERID_RoamingAppData : FOLDERID_LocalAppData;
   wchar_t* path = nullptr;

@@ -216,6 +216,23 @@ public:
 plx::ComPtr<IDWriteFactory> CreateDWriteFactory() ;
 
 
+///////////////////////////////////////////////////////////////////////////////
+// plx::FontWSSParams : style, weight, stretch for DirectWrite fonts.
+//
+
+struct FontWSSParams {
+  DWRITE_FONT_WEIGHT weight;
+  DWRITE_FONT_STYLE style;
+  DWRITE_FONT_STRETCH stretch;
+
+  static FontWSSParams MakeNormal() {
+    FontWSSParams wss = {
+      DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL };
+    return wss;
+  }
+};
+
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // plx::CreateD2D1FactoryST : Direct2D fatory.
@@ -597,6 +614,16 @@ public:
     : sattr_(nullptr) {
   }
 };
+
+
+///////////////////////////////////////////////////////////////////////////////
+// plx::CreateDWriteSystemTextFormat :  DirectWrite font object.
+//
+
+plx::ComPtr<IDWriteTextFormat> CreateDWriteSystemTextFormat(
+    plx::ComPtr<IDWriteFactory> dw_factory,
+    const wchar_t* font_family, float size,
+    const plx::FontWSSParams& params) ;
 
 
 ///////////////////////////////////////////////////////////////////////////////
