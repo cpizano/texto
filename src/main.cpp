@@ -446,7 +446,8 @@ public:
         clipboard_copy();
         break;
       case 0x08 :                 // backspace.
-        add_character(0x08);
+        textview_->back_erase();
+        update_screen();
         break;
       case 0x0A :                 // line feed.
       case 0x0D :                 // carriage return.

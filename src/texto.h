@@ -59,6 +59,14 @@ public:
     update_layout();
   }
 
+  bool back_erase() {
+    if (cursor_ <= 0)
+      return false;
+    active_text_.erase(--cursor_, 1);
+    update_layout();
+    return true;
+  }
+
   void draw(ID2D1DeviceContext* dc,
             ID2D1Brush* text_brush,
             ID2D1Brush* caret_brush,
