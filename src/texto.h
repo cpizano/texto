@@ -59,10 +59,14 @@ public:
     update_layout();
   }
 
-  void draw(ID2D1DeviceContext* dc, ID2D1Brush* brush) {
+  void draw(ID2D1DeviceContext* dc,
+            ID2D1Brush* text_brush,
+            ID2D1Brush* caret_brush,
+            ID2D1Brush* line_brush) {
     if (!dwrite_layout_)
       update_layout();
-    dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), brush);
+    dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), text_brush);
+    draw_caret(dc, caret_brush, line_brush);
   }
 
 private:
@@ -81,6 +85,25 @@ private:
   void update_layout() {
     plx::Range<const wchar_t> txt(active_text_.c_str(), active_text_.size());
     dwrite_layout_ = plx::CreateDWTextLayout(dwrite_factory_, dwrite_fmt_, txt, box_);
+  }
+
+  void draw_caret(ID2D1DeviceContext* dc, ID2D1Brush* caret_brush, ID2D1Brush* line_brush) {
+    auto aa_mode = dc->GetAntialiasMode();
+    dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+    DWRITE_HIT_TEST_METRICS hit_metrics;
+    float x, y;
+    auto hr = dwrite_layout_->HitTestTextPosition(cursor_, FALSE, &x, &y, &hit_metrics);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+    auto yf = y + hit_metrics.height;
+    // caret.
+    dc->DrawRectangle(
+        D2D1::RectF(x, y, x + 2.0f, yf), caret_brush, 1.0f);
+    dc->SetAntialiasMode(aa_mode);
+    // active line.
+    dc->FillRectangle(
+        D2D1::RectF(0, y, box_.width, yf), line_brush);
+    dc->SetAntialiasMode(aa_mode);
   }
 
 };

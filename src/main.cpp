@@ -661,25 +661,6 @@ public:
     }
   }
 
-  void draw_caret(ID2D1DeviceContext* dc, IDWriteTextLayout* tl) {
-    auto aa_mode = dc->GetAntialiasMode();
-    dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
-    DWRITE_HIT_TEST_METRICS hit_metrics;
-    float x, y;
-    auto hr = tl->HitTestTextPosition(0, FALSE, &x, &y, &hit_metrics);
-    if (hr != S_OK)
-      throw plx::ComException(__LINE__, hr);
-    auto yf = y + hit_metrics.height;
-    // caret.
-    dc->DrawRectangle(
-        D2D1::RectF(x, y, x + 2.0f, yf), brushes_[brush_red].Get(), 1.0f / scale_._11);
-    dc->SetAntialiasMode(aa_mode);
-    // active line.
-    dc->FillRectangle(
-        D2D1::RectF(0, y, static_cast<float>(width_), yf), brushes_[brush_sline].Get());
-    dc->SetAntialiasMode(aa_mode);
-  }
-
   void draw_selection(ID2D1DeviceContext* dc, IDWriteTextLayout* tl, Selection& sel) {
     if (sel.is_empty())
       return;
@@ -734,7 +715,8 @@ public:
  
       auto trans = D2D1::Matrix3x2F::Translation(margin_tl_.x, margin_tl_.y - scroll_v_);
       dc()->SetTransform(trans * scale_);
-      textview_->draw(dc(), brushes_[brush_text].Get());
+      textview_->draw(dc(),
+          brushes_[brush_text].Get(), brushes_[brush_red].Get(), brushes_[brush_sline].Get());
       
       // debugging visual aids.
       if (flag_options_[debug_text_boxes]) {
