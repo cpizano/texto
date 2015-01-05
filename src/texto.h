@@ -10,7 +10,77 @@
 // TExTO, as a text editor, is still finding out who she is. It should straddle between a better
 // notepad and probably a worse Notepad++.
 
+class TextView {
+  D2D1_SIZE_F box_;
+  uint32_t cursor_;
+  size_t active_start_;
+  size_t active_end_;
+  std::unique_ptr<std::wstring> full_text_;
+  std::wstring active_text_;
+  plx::ComPtr<IDWriteTextLayout> dwrite_layout_;
+  plx::ComPtr<IDWriteFactory> dwrite_factory_;
+  plx::ComPtr<IDWriteTextFormat> dwrite_fmt_;
 
+  TextView& operator=(const TextView&) = delete;
+  TextView(const TextView&) = delete;
+
+public:
+  TextView() 
+      : box_(D2D1::SizeF()), cursor_(0), active_start_(0), active_end_(0) {
+  }
+
+  void set_size(uint32_t width, uint32_t height) {
+    box_ = D2D1::SizeF(static_cast<float>(width), static_cast<float>(height));
+  }
+
+  void set_text_fmt(plx::ComPtr<IDWriteTextFormat> dwrite_fmt) {
+    dwrite_fmt_ = dwrite_fmt;
+  }
+
+  void set_full_text(std::unique_ptr<std::wstring> text) {
+    full_text_ = std::move(text);
+    slice_active_text(0);
+  }
+
+  void set_cursor(uint32_t pos) {
+    if (pos > active_text_.size())
+      __debugbreak();
+    cursor_ = pos;
+  }
+
+  void insert_char(wchar_t c) {
+    if (c < 0x20)
+      __debugbreak();
+    active_text_.insert(cursor_, 1, c);
+    update_layout();
+  }
+
+  void draw(ID2D1DeviceContext* dc, ID2D1Brush* brush) {
+    dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), brush);
+  }
+
+private:
+  void slice_active_text(size_t from) {
+    const size_t slice_size = 8 * 1024;  // $$ estimate it based on box_;
+    active_text_ = full_text_->substr(from, from + slice_size);
+    active_start_ = from;
+    active_end_ = from + active_text_.size();
+    update_layout();
+  }
+
+  void update_layout() {
+    plx::Range<const wchar_t> txt(active_text_.c_str(), active_text_.size());
+    dwrite_layout_ = plx::CreateDWTextLayout(dwrite_factory_, dwrite_fmt_, txt, box_);
+  }
+
+
+};
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//  old design
+//
 // Offsets to text that is selected. Not meaniful without a TextBlock.
 struct Selection {
   uint32_t start;

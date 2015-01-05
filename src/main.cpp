@@ -182,13 +182,9 @@ class DCoWindow : public plx::Window <DCoWindow> {
   D2D1_POINT_2F widget_pos_;
   D2D1_POINT_2F widget_radius_;
 
-  std::vector<TextBlock> text_;
-  Cursor cursor_;
   float scroll_v_;
   //float scale_;
   D2D1::Matrix3x2F scale_;
-  // speeds up hit testing.
-  size_t first_block_in_view_;
 
   plx::ComPtr<ID3D11Device> d3d_device_;
   plx::ComPtr<ID2D1Factory2> d2d_factory_;
@@ -229,10 +225,8 @@ class DCoWindow : public plx::Window <DCoWindow> {
 public:
   DCoWindow(int width, int height)
       : width_(width), height_(height),
-        cursor_(text_),
         scroll_v_(0.0f),
-        scale_(D2D1::Matrix3x2F::Scale(1.0f, 1.0f)),
-        first_block_in_view_(0) {
+        scale_(D2D1::Matrix3x2F::Scale(1.0f, 1.0f)) {
     // $$ read from config.
     margin_tl_ = D2D1::Point2F(22.0f, 36.0f);
     margin_br_ = D2D1::Point2F(16.0f, 16.0f);
@@ -315,7 +309,6 @@ public:
           brushes_[brush_sel].GetAddressOf());
     }
     
-    cursor_.init();
     update_title();
     update_screen();
   }
@@ -368,7 +361,7 @@ public:
         c = 0x1A;
     }
 
-    cursor_.add_string(str, true);
+    // $$ here add the text.
     update_screen();
     ::GlobalUnlock(gmem);
     return true;
@@ -422,20 +415,16 @@ public:
 
   LRESULT keydown_handler(int vkey) {
     if (vkey == VK_LEFT) {
-      if (!cursor_.move_left()) {
-        ::Beep(440, 10);
-        return 0L;
-      }
+
+
     } else if (vkey == VK_RIGHT) {
-      if (!cursor_.move_right()) {
-        ::Beep(440, 10);
-        return 0L;
-      }
+
+
     } else if (vkey == VK_UP) {
-      cursor_.move_up();
+
     }
     else if (vkey == VK_DOWN) {
-      cursor_.move_down();
+
     } else {
       return 0L;
     }
@@ -498,9 +487,8 @@ public:
   }
 
   LRESULT left_mouse_dblclick_handler(POINTS pts) {
-    wchar_t ch = cursor_.select();
-    if (ch)
-      update_screen();
+
+    update_screen();
     return 0L;
   }
 
@@ -528,8 +516,7 @@ public:
           scalar_scale, scalar_scale, D2D1::Point2F(margin_tl_.x, 0));
 
       update_title();
-      for (auto& tb : text_)
-        tb.set_needs_layout();
+
 
     } else {
       // scroll.
@@ -569,20 +556,18 @@ public:
     }
     if (command_id == IDC_ALT_FONT) {
       flag_options_[alternate_font].flip();
-      invalidate_all();
+
     }
     if (command_id == IDC_SAVE_PLAINTEXT) {
       PlainTextFileIO ptfio(plx::FilePath(L"c:\\test\\texto_file_out.txt"));
-      ptfio.save(text_);
     }
     if (command_id == IDC_LOAD_PLAINTEXT) {
       FileOpenDialog dialog(window());
       if (!dialog.success())
         return 0L;
-      text_.clear();
+      
       PlainTextFileIO ptfio(dialog.path());
-      ptfio.load(cursor_);
-      cursor_.init();
+      
       file_path_ = std::make_unique<plx::FilePath>(dialog.path());
       update_title();
     }
@@ -593,107 +578,28 @@ public:
 
   void add_character(wchar_t ch) {
     bool needs_layout = false;
-    auto& block = cursor_.current_block();
+
     if (ch == '\n') {
-      // new line.
-      if (cursor_.block_len() >= TextBlock::target_size) {
-        // start a new block.
-        cursor_.new_block();
-        layout(cursor_.current_block());
-      } else {
-        // new line goes in existing block.
-        cursor_.insert_char(ch);
-        needs_layout = true;
-      }
+ 
     } else if (ch == 0x08) {
       // deletion of one character.
-      cursor_.remove_char();
-      needs_layout = true;
+
     } else {
       // add a character in the current block.
-      cursor_.insert_char(ch);
-      needs_layout = true;
     }
 
-    if (needs_layout)
-      layout(block);
     update_screen();
   }
 
-  void layout(TextBlock& block) {
-    auto box = D2D1::SizeF(
-        static_cast<float>(width_) - margin_tl_.x - margin_br_.x,
-        static_cast<float>(height_)- margin_tl_.y - margin_tl_.y);
-    plx::Range<const wchar_t> txt(block.text->c_str(), block.text->size());
-    auto fmt_index = flag_options_[alternate_font] ? 1 : 0;
-    block.layout = plx::CreateDWTextLayout(dwrite_factory_, text_fmt_[fmt_index], txt, box);
-    auto hr = block.layout->GetMetrics(&block.metrics);
-    if (hr != S_OK) {
-      __debugbreak();
-    }
-  }
-
-  void invalidate_all() {
-    for (auto& tb : text_) {
-      tb.set_needs_layout();
-    }
-  }
 
   void ensure_cursor_in_view() {
-    auto& cb = cursor_.current_block();
-    if (cb.needs_layout())
-      return;
 
-    DWRITE_HIT_TEST_METRICS hit_metrics;
-    float x, y;
-    auto hr = cb.layout->HitTestTextPosition(
-        cursor_.current_offset(), FALSE, &x, &y, &hit_metrics);
-    if (hr != S_OK)
-      throw plx::ComException(__LINE__, hr);
-
-    y += cb.metrics.top;
-    auto actual_y = margin_tl_.y + y - scroll_v_;
-
-    if (actual_y > (height_ - margin_br_.y))
-      scroll_v_ = y - height_ + margin_tl_.y + margin_br_.y;
-
-    if (actual_y < margin_tl_.y)
-      scroll_v_ = y; 
   }
 
   bool move_cursor(POINTS pts) {
     auto y = (pts.y / scale_._11)  + scroll_v_ - margin_tl_.y;
     auto x = (pts.x - margin_tl_.x) / scale_._11;
 
-    for (auto ix = first_block_in_view_; ix != text_.size(); ++ix) {
-      if (text_[ix].metrics.top > y) {
-        if (ix == 0) {
-          //$$ handle hits above start of text.
-          return false;
-        }
-        // found the block. Make |y| relative to it.
-        --ix;
-        auto& tb = text_[ix];
-        y -= tb.metrics.top;
-        if (x < 0.0f) {
-          //$$ handle hits on the left margin.
-          return false;
-        }
-        if (y < 0.0f)
-          __debugbreak();
-
-        BOOL inside, trailing;
-        DWRITE_HIT_TEST_METRICS hit_metrics;
-        auto hr = tb.layout->HitTestPoint(x, y, &trailing, &inside, &hit_metrics);
-        if (hr != S_OK)
-          __debugbreak();
-        // if the hit is in an actual glyph, |inside| is true but anyhow we want to position
-        // the cursor at the end of the line which |hit_metrics| returns.
-        cursor_.move_to(plx::To<uint32_t>(ix), hit_metrics.textPosition);
-        cursor_.clear_selection();
-        return true;
-      }
-    }
     return false;
   }
 
@@ -763,7 +669,7 @@ public:
     dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
     DWRITE_HIT_TEST_METRICS hit_metrics;
     float x, y;
-    auto hr = tl->HitTestTextPosition(cursor_.current_offset(), FALSE, &x, &y, &hit_metrics);
+    auto hr = tl->HitTestTextPosition(0, FALSE, &x, &y, &hit_metrics);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
     auto yf = y + hit_metrics.height;
@@ -828,51 +734,19 @@ public:
       auto v_min = scroll_v_;
       auto v_max = scroll_v_ + static_cast<float>(height_) / scale_._11;
 
-      uint32_t block_number = 0;
-      bool painting = false;
-
-      for (auto& tb : text_) {
-        if (tb.needs_layout())
-          layout(tb);
-
-        tb.metrics.top = bottom;
-        bottom += tb.metrics.height;
-
-        if (((bottom > v_min) && (bottom < v_max)) || 
-            ((tb.metrics.top > v_min) && (tb.metrics.top < v_max)) ||
-            ((tb.metrics.top < v_min) && (bottom  > v_max))) {
-
-          // in view, paint it.
-          if (!painting)
-            first_block_in_view_ = block_number;
-          painting = true;
-
-          auto trans = D2D1::Matrix3x2F::Translation(margin_tl_.x,
-                                                     tb.metrics.top + margin_tl_.y - scroll_v_);
-          dc()->SetTransform(trans * scale_);
-          draw_selection(dc(), tb.layout.Get(), tb.selection);
-
-          dc()->DrawTextLayout(D2D1::Point2F(), tb.layout.Get(), brushes_[brush_text].Get());
-
-          // debugging visual aids.
-          if (flag_options_[debug_text_boxes]) {
-            dc()->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
-            auto debug_rect = 
-                D2D1::RectF(tb.metrics.left, 0, tb.metrics.width, tb.metrics.height);
-            dc()->DrawRectangle(debug_rect, brushes_[brush_red].Get(), 1.0f / scale_._11);
-            // show space and line breaks.
-            draw_marks(dc(), tb.layout.Get(), tb.text->c_str());
-          }
-          if (cursor_.block_number() == block_number) {
-            // draw caret since it is visible.
-            draw_caret(dc(), tb.layout.Get());
-          }
-        } else if (painting) {
-          // we went outside of the viewport, no need to do more work right now.
-          break;
-        }
-        ++block_number;
+ 
+      auto trans = D2D1::Matrix3x2F::Translation(margin_tl_.x, margin_tl_.y - scroll_v_);
+      dc()->SetTransform(trans * scale_);
+      //draw_selection(..);
+      //draw text ..
+      
+      // debugging visual aids.
+      if (flag_options_[debug_text_boxes]) {
+        //dc()->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+        //draw_marks(..);
       }
+
+      // draw_caret(..);
     }
     dco_device_->Commit();
   }
