@@ -584,20 +584,10 @@ public:
   }
 
   void add_character(wchar_t ch) {
-    bool needs_layout = false;
-
-    if (ch == '\n') {
- 
-    } else if (ch == 0x08) {
-      // deletion of one character.
-
-    } else {
-      // add a character in the current block.
-    }
-
+    // add a character in the current block.
+    textview_->insert_char(ch);
     update_screen();
   }
-
 
   void ensure_cursor_in_view() {
 

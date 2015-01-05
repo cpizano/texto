@@ -34,10 +34,12 @@ public:
 
   void set_size(uint32_t width, uint32_t height) {
     box_ = D2D1::SizeF(static_cast<float>(width), static_cast<float>(height));
+    invalidate();
   }
 
   void set_text_fmt(plx::ComPtr<IDWriteTextFormat> dwrite_fmt) {
     dwrite_fmt_ = dwrite_fmt;
+    invalidate();
   }
 
   void set_full_text(std::unique_ptr<std::wstring> text) {
@@ -52,9 +54,8 @@ public:
   }
 
   void insert_char(wchar_t c) {
-    if (c < 0x20)
-      __debugbreak();
     active_text_.insert(cursor_, 1, c);
+    ++cursor_;
     update_layout();
   }
 
@@ -73,11 +74,14 @@ private:
     update_layout();
   }
 
+  void invalidate() {
+    dwrite_layout_.Reset();
+  }
+
   void update_layout() {
     plx::Range<const wchar_t> txt(active_text_.c_str(), active_text_.size());
     dwrite_layout_ = plx::CreateDWTextLayout(dwrite_factory_, dwrite_fmt_, txt, box_);
   }
-
 
 };
 
