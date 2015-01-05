@@ -25,8 +25,11 @@ class TextView {
   TextView(const TextView&) = delete;
 
 public:
-  TextView() 
-      : box_(D2D1::SizeF()), cursor_(0), active_start_(0), active_end_(0) {
+  TextView(plx::ComPtr<IDWriteFactory> dwrite_factory) 
+      : box_(D2D1::SizeF()),
+        cursor_(0),
+        active_start_(0), active_end_(0),
+        dwrite_factory_(dwrite_factory) {
   }
 
   void set_size(uint32_t width, uint32_t height) {
@@ -56,6 +59,8 @@ public:
   }
 
   void draw(ID2D1DeviceContext* dc, ID2D1Brush* brush) {
+    if (!dwrite_layout_)
+      update_layout();
     dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), brush);
   }
 

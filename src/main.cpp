@@ -131,14 +131,14 @@ public:
       block_to_disk(file, content);
   }
 
-  void load(Cursor& cursor) {
+  void load(TextView& textview) {
     auto file = plx::File::Create(
         path_, 
         plx::FileParams::ReadWrite_SharedRead(OPEN_EXISTING),
         plx::FileSecurity());
     // need to read the whole file at once because the UTF16 conversion fails if
     // we end up trying to convert in the middle of multi-byte sequence.
-    cursor.add_string(file_from_disk(file), false);
+    textview.set_full_text(std::make_unique<std::wstring>(file_from_disk(file), false));
   }
 
 private:
@@ -221,6 +221,8 @@ class DCoWindow : public plx::Window <DCoWindow> {
 
   plx::ComPtr<IDWriteTextLayout> title_layout_;
   std::unique_ptr<plx::FilePath> file_path_;
+
+  TextView* textview_;
 
 public:
   DCoWindow(int width, int height)
@@ -308,6 +310,10 @@ public:
       dc()->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::LightGray, 0.8f),
           brushes_[brush_sel].GetAddressOf());
     }
+
+    textview_ = new TextView(dwrite_factory_);
+    textview_->set_size(width_ - (22 + 16), height_ - (36 + 16));
+    textview_->set_text_fmt(text_fmt_[fmt_mono_text]);
     
     update_title();
     update_screen();
@@ -567,6 +573,7 @@ public:
         return 0L;
       
       PlainTextFileIO ptfio(dialog.path());
+      ptfio.load(*textview_);
       
       file_path_ = std::make_unique<plx::FilePath>(dialog.path());
       update_title();
@@ -737,8 +744,7 @@ public:
  
       auto trans = D2D1::Matrix3x2F::Translation(margin_tl_.x, margin_tl_.y - scroll_v_);
       dc()->SetTransform(trans * scale_);
-      //draw_selection(..);
-      //draw text ..
+      textview_->draw(dc(), brushes_[brush_text].Get());
       
       // debugging visual aids.
       if (flag_options_[debug_text_boxes]) {
