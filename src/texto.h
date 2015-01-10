@@ -13,6 +13,7 @@
 class TextView {
   D2D1_SIZE_F box_;
   uint32_t cursor_;
+  uint32_t v_scroll_;
   size_t active_start_;
   size_t active_end_;
   std::unique_ptr<std::wstring> full_text_;
@@ -28,6 +29,7 @@ public:
   TextView(plx::ComPtr<IDWriteFactory> dwrite_factory) 
       : box_(D2D1::SizeF()),
         cursor_(0),
+        v_scroll_(0),
         active_start_(0), active_end_(0),
         dwrite_factory_(dwrite_factory) {
   }
@@ -51,6 +53,13 @@ public:
     if (pos > active_text_.size())
       __debugbreak();
     cursor_ = pos;
+  }
+
+  void set_v_scroll(uint32_t v_scroll) {
+    auto metrics = get_metrics();
+    auto left =  v_scroll - metrics.lineCount;
+
+    v_scroll_ = v_scroll;
   }
 
   void insert_char(wchar_t c) {
@@ -112,6 +121,14 @@ private:
     dc->FillRectangle(
         D2D1::RectF(0, y, box_.width, yf), line_brush);
     dc->SetAntialiasMode(aa_mode);
+  }
+
+  DWRITE_TEXT_METRICS get_metrics() {
+    DWRITE_TEXT_METRICS metrics;
+    auto hr = dwrite_layout_->GetMetrics(&metrics);
+    if (hr != S_OK)
+      __debugbreak();
+    return metrics;
   }
 
 };

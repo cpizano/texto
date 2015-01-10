@@ -680,52 +680,38 @@ public:
     dc->SetAntialiasMode(aa_mode);
   }
 
+  void draw_frame(ID2D1DeviceContext* dc) {
+    // draw widgets.
+    dc->DrawGeometry(circle_geom_move_.Get(), brushes_[brush_blue].Get(), 4.0f);
+    dc->DrawGeometry(circle_geom_close_.Get(), brushes_[brush_red].Get(), 4.0f);
+    // draw title.
+    dc->DrawTextLayout(D2D1::Point2F(margin_tl_.x, widget_pos_.y - widget_radius_.y),
+                       title_layout_.Get(), brushes_[brush_green].Get());
+    // draw left margin.
+    dc->DrawLine(D2D1::Point2F(margin_tl_.x, margin_tl_.y),
+                 D2D1::Point2F(margin_tl_.x, height_ - margin_br_.y),
+                 brushes_[brush_blue].Get(), 0.5f);
+  }
+
   void update_screen() {
     {
       D2D1::ColorF bk_color(0x000000, flag_options_[opacity_50_percent] ? 0.5f : 0.9f);
       plx::ScopedD2D1DeviceContext dc(root_surface_, zero_offset, dpi(), &bk_color);
-      
-      // draw widgets.
-      dc()->DrawGeometry(circle_geom_move_.Get(), brushes_[brush_blue].Get(), 4.0f);
-      dc()->DrawGeometry(circle_geom_close_.Get(), brushes_[brush_red].Get(), 4.0f);
-      // draw title.
-      dc()->DrawTextLayout(D2D1::Point2F(margin_tl_.x, widget_pos_.y - widget_radius_.y),
-                         title_layout_.Get(), brushes_[brush_green].Get());
+      draw_frame(dc());
 
-      dc()->SetTransform(scale_);
-
-      // draw left margin.
-      dc()->DrawLine(D2D1::Point2F(margin_tl_.x, margin_tl_.y),
-                   D2D1::Point2F(margin_tl_.x, height_ - margin_br_.y),
-                   brushes_[brush_blue].Get(), 0.5f);
+      auto trans = D2D1::Matrix3x2F::Translation(margin_tl_.x, margin_tl_.y - scroll_v_);
+      dc()->SetTransform(trans * scale_);
 
       // draw the start of text line marker.
       if (scroll_v_ < 0) {
-        dc()->SetTransform(D2D1::Matrix3x2F::Translation(
-            margin_tl_.x, margin_tl_.y - scroll_v_) * scale_);
         dc()->DrawLine(D2D1::Point2F(0.0f, -8.0f),
-                     D2D1::Point2F(static_cast<float>(width_), -8.0f),
-                     brushes_[brush_blue].Get(), 0.5f);
+                       D2D1::Point2F(static_cast<float>(width_), -8.0f),
+                       brushes_[brush_blue].Get(), 0.5f);
       }
-
-      // draw contents.
-      float bottom = 0.0f;
-      auto v_min = scroll_v_;
-      auto v_max = scroll_v_ + static_cast<float>(height_) / scale_._11;
-
  
-      auto trans = D2D1::Matrix3x2F::Translation(margin_tl_.x, margin_tl_.y - scroll_v_);
-      dc()->SetTransform(trans * scale_);
       textview_->draw(dc(),
           brushes_[brush_text].Get(), brushes_[brush_red].Get(), brushes_[brush_sline].Get());
-      
-      // debugging visual aids.
-      if (flag_options_[debug_text_boxes]) {
-        //dc()->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
-        //draw_marks(..);
-      }
 
-      // draw_caret(..);
     }
     dco_device_->Commit();
   }
