@@ -8,16 +8,17 @@
 // need to read Kenny Kerr tutorials on all these technologies.
 //
 // TExTO, as a text editor, is still finding out who she is. It should straddle between a better
-// notepad and probably a worse Notepad++.
+// notepad.exe and probably a worse notepad++.
 
 class TextView {
   D2D1_SIZE_F box_;
   uint32_t cursor_;
-  uint32_t v_scroll_;
   size_t active_start_;
   size_t active_end_;
+  std::vector<size_t> starts_;
   std::unique_ptr<std::wstring> full_text_;
-  std::wstring active_text_;
+  std::unique_ptr<std::wstring> active_text_;
+  std::vector<DWRITE_LINE_METRICS> line_metrics_;
   plx::ComPtr<IDWriteTextLayout> dwrite_layout_;
   plx::ComPtr<IDWriteFactory> dwrite_factory_;
   plx::ComPtr<IDWriteTextFormat> dwrite_fmt_;
@@ -29,9 +30,9 @@ public:
   TextView(plx::ComPtr<IDWriteFactory> dwrite_factory) 
       : box_(D2D1::SizeF()),
         cursor_(0),
-        v_scroll_(0),
         active_start_(0), active_end_(0),
         dwrite_factory_(dwrite_factory) {
+    active_text_ = std::make_unique<std::wstring>();
   }
 
   void set_size(uint32_t width, uint32_t height) {
@@ -46,33 +47,56 @@ public:
 
   void set_full_text(std::unique_ptr<std::wstring> text) {
     full_text_ = std::move(text);
+    starts_.clear();
+    active_text_.reset();
     slice_active_text(0);
+    invalidate();
   }
 
   void set_cursor(uint32_t pos) {
-    if (pos > active_text_.size())
+    if (pos > active_text_->size())
       __debugbreak();
     cursor_ = pos;
   }
 
-  void set_v_scroll(uint32_t v_scroll) {
-    auto metrics = get_metrics();
-    auto left =  v_scroll - metrics.lineCount;
-
-    v_scroll_ = v_scroll;
+  void move_v_scroll(int v_offset) {
+    if (v_offset == 0)
+      return;
+ 
+    if (v_offset < 0) {
+      v_offset = -v_offset;
+      if (v_offset > starts_.size())
+        return;
+      size_t start = 0;
+      for (; v_offset; --v_offset) {
+        start = starts_.back();
+        starts_.pop_back();
+      }
+      slice_active_text(start);
+    } else {
+      size_t pos = 0;
+      for (auto& ln : line_metrics_) {
+        pos += ln.length;
+        if (--v_offset == 0)
+          break;
+      }
+      starts_.push_back(active_start_);
+      slice_active_text(active_start_ + pos);
+    }
+    invalidate();
   }
 
   void insert_char(wchar_t c) {
-    active_text_.insert(cursor_, 1, c);
+    active_text_->insert(cursor_, 1, c);
     ++cursor_;
-    update_layout();
+    invalidate();
   }
 
   bool back_erase() {
     if (cursor_ <= 0)
       return false;
-    active_text_.erase(--cursor_, 1);
-    update_layout();
+    active_text_->erase(--cursor_, 1);
+    invalidate();
     return true;
   }
 
@@ -80,19 +104,29 @@ public:
             ID2D1Brush* text_brush,
             ID2D1Brush* caret_brush,
             ID2D1Brush* line_brush) {
-    if (!dwrite_layout_)
+
+    if (!dwrite_layout_) {
       update_layout();
-    dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), text_brush);
+    }
+
+    auto point = D2D1::Point2F();
+    dc->DrawTextLayout(point, dwrite_layout_.Get(), text_brush);
     draw_caret(dc, caret_brush, line_brush);
   }
 
 private:
   void slice_active_text(size_t from) {
+    if (!full_text_)
+      return;
     const size_t slice_size = 8 * 1024;  // $$ estimate it based on box_;
-    active_text_ = full_text_->substr(from, from + slice_size);
-    active_start_ = from;
-    active_end_ = from + active_text_.size();
-    update_layout();
+    if (!active_text_) {
+      active_start_ = from;
+      active_end_ = from + std::min(size_t(1024 * 8), full_text_->size());
+    } else {
+      active_text_ = std::make_unique<std::wstring>(full_text_->substr(from, from + slice_size));
+      active_start_ = from;
+      active_end_ = from + active_text_->size();
+    }
   }
 
   void invalidate() {
@@ -100,11 +134,23 @@ private:
   }
 
   void update_layout() {
-    plx::Range<const wchar_t> txt(active_text_.c_str(), active_text_.size());
+    plx::Range<const wchar_t> txt;
+    if (!active_text_) {
+      txt = plx::Range<const wchar_t>(&(*full_text_)[0] + active_start_,
+                                      &(*full_text_)[0] + active_end_);
+    } else {
+      txt = plx::Range<const wchar_t>(active_text_->c_str(), active_text_->size());
+    }
     dwrite_layout_ = plx::CreateDWTextLayout(dwrite_factory_, dwrite_fmt_, txt, box_);
+    line_metrics_ = get_line_metrics();
   }
 
   void draw_caret(ID2D1DeviceContext* dc, ID2D1Brush* caret_brush, ID2D1Brush* line_brush) {
+    if (cursor_ < active_start_)
+      return;
+    if (cursor_ > active_end_)
+      return;
+
     auto aa_mode = dc->GetAntialiasMode();
     dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
     DWRITE_HIT_TEST_METRICS hit_metrics;
@@ -123,11 +169,17 @@ private:
     dc->SetAntialiasMode(aa_mode);
   }
 
-  DWRITE_TEXT_METRICS get_metrics() {
-    DWRITE_TEXT_METRICS metrics;
-    auto hr = dwrite_layout_->GetMetrics(&metrics);
+  std::vector<DWRITE_LINE_METRICS> get_line_metrics() {
+    uint32_t line_count = 0;
+    auto hr = dwrite_layout_->GetLineMetrics(nullptr, 0, &line_count);
+    if (hr != E_NOT_SUFFICIENT_BUFFER)
+      __debugbreak();
+
+    std::vector<DWRITE_LINE_METRICS> metrics(line_count);
+    hr = dwrite_layout_->GetLineMetrics(&metrics.front(), line_count, &line_count);
     if (hr != S_OK)
       __debugbreak();
+
     return metrics;
   }
 

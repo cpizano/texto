@@ -16,6 +16,10 @@
 // 12. impl copy
 // 13. text stats above text.
 
+template <typename T> int sgn(T val) {
+  return (T(0) < val) - (val < T(0));
+}
+
 namespace ui_txt {
   const wchar_t no_file_title[] = L"TExTO v0.0.0b <no file> [F2: open]\n";
 }
@@ -312,8 +316,8 @@ public:
     }
 
     textview_ = new TextView(dwrite_factory_);
-    textview_->set_size(width_ - (22 + 16), height_ - (36 + 16));
     textview_->set_text_fmt(text_fmt_[fmt_mono_text]);
+    textview_->set_size(width_ - (22 + 16), height_ - (36 + 16));
     
     update_title();
     update_screen();
@@ -524,13 +528,14 @@ public:
 
       update_title();
 
-
     } else {
       // scroll.
       // $$ read the divisor from the config file.
       if ((offset > 0) && (scroll_v_ < -100.0f))
         return 0L;
       scroll_v_ -= offset / 4;
+
+      textview_->move_v_scroll(sgn(-offset));
     }
 
     update_screen();
@@ -699,7 +704,7 @@ public:
       plx::ScopedD2D1DeviceContext dc(root_surface_, zero_offset, dpi(), &bk_color);
       draw_frame(dc());
 
-      auto trans = D2D1::Matrix3x2F::Translation(margin_tl_.x, margin_tl_.y - scroll_v_);
+      auto trans = D2D1::Matrix3x2F::Translation(margin_tl_.x, margin_tl_.y);
       dc()->SetTransform(trans * scale_);
 
       // draw the start of text line marker.
