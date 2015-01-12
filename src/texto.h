@@ -40,30 +40,32 @@ class TextView {
   TextView(const TextView&) = delete;
 
 public:
-  TextView(plx::ComPtr<IDWriteFactory> dwrite_factory) 
+  TextView(plx::ComPtr<IDWriteFactory> dwrite_factory,
+           plx::ComPtr<IDWriteTextFormat> dwrite_fmt) 
       : box_(D2D1::SizeF()),
         cursor_(0),
         start_(0), end_(0),
         active_start_(0), active_end_(0),
-        dwrite_factory_(dwrite_factory) {
+        dwrite_factory_(dwrite_factory),
+        dwrite_fmt_(dwrite_fmt) {
     full_text_ = std::make_unique<std::wstring>();
+  }
+
+  TextView(plx::ComPtr<IDWriteFactory> dwrite_factory,
+           plx::ComPtr<IDWriteTextFormat> dwrite_fmt,
+           std::unique_ptr<std::wstring> text) 
+      : box_(D2D1::SizeF()),
+        cursor_(0),
+        start_(0), end_(0),
+        active_start_(0), active_end_(0),
+        dwrite_factory_(dwrite_factory),
+        dwrite_fmt_(dwrite_fmt) {
+    full_text_ = std::move(text);
+    change_view(0);
   }
 
   void set_size(uint32_t width, uint32_t height) {
     box_ = D2D1::SizeF(static_cast<float>(width), static_cast<float>(height));
-    invalidate();
-  }
-
-  void set_text_fmt(plx::ComPtr<IDWriteTextFormat> dwrite_fmt) {
-    dwrite_fmt_ = dwrite_fmt;
-    invalidate();
-  }
-
-  void set_full_text(std::unique_ptr<std::wstring> text) {
-    full_text_ = std::move(text);
-    starts_.clear();
-    active_text_.reset();
-    change_view(0);
     invalidate();
   }
 

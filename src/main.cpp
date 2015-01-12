@@ -135,14 +135,14 @@ public:
       block_to_disk(file, content);
   }
 
-  void load(TextView& textview) {
+  std::unique_ptr<std::wstring> load() {
     auto file = plx::File::Create(
         path_, 
         plx::FileParams::ReadWrite_SharedRead(OPEN_EXISTING),
         plx::FileSecurity());
     // need to read the whole file at once because the UTF16 conversion fails if
     // we end up trying to convert in the middle of multi-byte sequence.
-    textview.set_full_text(std::make_unique<std::wstring>(file_from_disk(file), false));
+    return std::make_unique<std::wstring>(file_from_disk(file), false);
   }
 
 private:
@@ -315,8 +315,7 @@ public:
           brushes_[brush_sel].GetAddressOf());
     }
 
-    textview_ = new TextView(dwrite_factory_);
-    textview_->set_text_fmt(text_fmt_[fmt_mono_text]);
+    textview_ = new TextView(dwrite_factory_, text_fmt_[fmt_mono_text]);
     textview_->set_size(width_ - (22 + 16), height_ - (36 + 16));
     
     update_title();
@@ -577,7 +576,9 @@ public:
         return 0L;
       
       PlainTextFileIO ptfio(dialog.path());
-      ptfio.load(*textview_);
+      delete textview_;
+      textview_ = new TextView(dwrite_factory_, text_fmt_[fmt_mono_text], ptfio.load());
+      textview_->set_size(width_ - (22 + 16), height_ - (36 + 16));
       
       file_path_ = std::make_unique<plx::FilePath>(dialog.path());
       update_title();
