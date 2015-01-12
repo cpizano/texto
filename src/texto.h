@@ -13,6 +13,8 @@
 class TextView {
   D2D1_SIZE_F box_;
   uint32_t cursor_;
+  size_t start_;
+  size_t end_;
   size_t active_start_;
   size_t active_end_;
   std::vector<size_t> starts_;
@@ -30,9 +32,10 @@ public:
   TextView(plx::ComPtr<IDWriteFactory> dwrite_factory) 
       : box_(D2D1::SizeF()),
         cursor_(0),
+        start_(0), end_(0),
         active_start_(0), active_end_(0),
         dwrite_factory_(dwrite_factory) {
-    active_text_ = std::make_unique<std::wstring>();
+    full_text_ = std::make_unique<std::wstring>();
   }
 
   void set_size(uint32_t width, uint32_t height) {
@@ -49,7 +52,7 @@ public:
     full_text_ = std::move(text);
     starts_.clear();
     active_text_.reset();
-    slice_active_text(0);
+    change_view(0);
     invalidate();
   }
 
@@ -72,7 +75,7 @@ public:
         start = starts_.back();
         starts_.pop_back();
       }
-      slice_active_text(start);
+      change_view(start);
     } else {
       size_t pos = 0;
       for (auto& ln : line_metrics_) {
@@ -80,22 +83,26 @@ public:
         if (--v_offset == 0)
           break;
       }
-      starts_.push_back(active_start_);
-      slice_active_text(active_start_ + pos);
+      starts_.push_back(start_);
+      change_view(start_ + pos);
     }
     invalidate();
   }
 
   void insert_char(wchar_t c) {
+    make_active_text();
     active_text_->insert(cursor_, 1, c);
     ++cursor_;
+    ++end_;
     invalidate();
   }
 
   bool back_erase() {
     if (cursor_ <= 0)
       return false;
+    make_active_text();
     active_text_->erase(--cursor_, 1);
+    --end_;
     invalidate();
     return true;
   }
@@ -115,18 +122,39 @@ public:
   }
 
 private:
-  void slice_active_text(size_t from) {
+  void change_view(size_t from) {
     if (!full_text_)
       return;
-    const size_t slice_size = 8 * 1024;  // $$ estimate it based on box_;
-    if (!active_text_) {
-      active_start_ = from;
-      active_end_ = from + std::min(size_t(1024 * 8), full_text_->size());
-    } else {
-      active_text_ = std::make_unique<std::wstring>(full_text_->substr(from, from + slice_size));
-      active_start_ = from;
-      active_end_ = from + active_text_->size();
+    if (active_text_) {
+      merge_active_text();
     }
+
+    if (from > full_text_->size())
+      __debugbreak();
+
+    start_ = from;
+    end_ = from + std::min(size_t(1024 * 8), full_text_->size() - from);
+  }
+
+  void make_active_text() {
+    if (active_text_)
+      return;
+
+    active_start_ = start_;
+    active_end_ = end_;
+
+    cursor_ -= plx::To<uint32_t>(start_);
+
+    active_text_ = std::make_unique<std::wstring>(
+        full_text_->substr(active_start_, active_end_ - active_start_));
+  }
+
+  void merge_active_text() {
+    if (active_text_->empty())
+      return;
+    full_text_->erase(active_start_, active_end_ - active_start_);
+    full_text_->insert(start_, *active_text_);
+    active_text_.reset();
   }
 
   void invalidate() {
@@ -136,8 +164,8 @@ private:
   void update_layout() {
     plx::Range<const wchar_t> txt;
     if (!active_text_) {
-      txt = plx::Range<const wchar_t>(&(*full_text_)[0] + active_start_,
-                                      &(*full_text_)[0] + active_end_);
+      txt = plx::Range<const wchar_t>(&(*full_text_)[0] + start_,
+                                      &(*full_text_)[0] + end_);
     } else {
       txt = plx::Range<const wchar_t>(active_text_->c_str(), active_text_->size());
     }
@@ -146,9 +174,9 @@ private:
   }
 
   void draw_caret(ID2D1DeviceContext* dc, ID2D1Brush* caret_brush, ID2D1Brush* line_brush) {
-    if (cursor_ < active_start_)
+    if (cursor_ < start_)
       return;
-    if (cursor_ > active_end_)
+    if (cursor_ > end_)
       return;
 
     auto aa_mode = dc->GetAntialiasMode();
