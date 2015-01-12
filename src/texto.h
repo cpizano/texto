@@ -56,10 +56,16 @@ public:
     invalidate();
   }
 
-  void set_cursor(uint32_t pos) {
-    if (pos > active_text_->size())
-      __debugbreak();
-    cursor_ = pos;
+  void move_cursor_left() {
+    if (cursor_ == 0)
+      return;
+    --cursor_;
+  }
+
+  void move_cursor_right() {
+    if (cursor_ == end_)
+      return;
+    ++cursor_;
   }
 
   void move_v_scroll(int v_offset) {

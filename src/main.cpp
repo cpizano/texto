@@ -425,11 +425,9 @@ public:
 
   LRESULT keydown_handler(int vkey) {
     if (vkey == VK_LEFT) {
-
-
+      textview_->move_cursor_left();
     } else if (vkey == VK_RIGHT) {
-
-
+      textview_->move_cursor_right();
     } else if (vkey == VK_UP) {
 
     }
