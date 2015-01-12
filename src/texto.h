@@ -181,16 +181,20 @@ private:
   }
 
   void draw_caret(ID2D1DeviceContext* dc, ID2D1Brush* caret_brush, ID2D1Brush* line_brush) {
+    auto view_cursor = cursor_ - plx::To<uint32_t>(start_);
+
+#if 1
     if (cursor_ < start_)
       return;
     if (cursor_ > end_)
       return;
+#endif
 
     auto aa_mode = dc->GetAntialiasMode();
     dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
     DWRITE_HIT_TEST_METRICS hit_metrics;
     float x, y;
-    auto hr = dwrite_layout_->HitTestTextPosition(cursor_, FALSE, &x, &y, &hit_metrics);
+    auto hr = dwrite_layout_->HitTestTextPosition(view_cursor, FALSE, &x, &y, &hit_metrics);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
     auto yf = y + hit_metrics.height;
