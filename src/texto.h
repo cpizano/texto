@@ -152,6 +152,9 @@ private:
   void merge_active_text() {
     if (active_text_->empty())
       return;
+
+    cursor_ += plx::To<uint32_t>(active_start_);
+
     full_text_->erase(active_start_, active_end_ - active_start_);
     full_text_->insert(start_, *active_text_);
     active_text_.reset();
