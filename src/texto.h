@@ -129,11 +129,7 @@ public:
 
 private:
   void change_view(size_t from) {
-    if (!full_text_)
-      return;
-    if (active_text_) {
-      merge_active_text();
-    }
+     merge_active_text();
 
     if (from > full_text_->size())
       __debugbreak();
@@ -156,6 +152,8 @@ private:
   }
 
   void merge_active_text() {
+    if (!active_text_)
+      return;
     if (active_text_->empty())
       return;
 
