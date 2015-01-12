@@ -11,20 +11,31 @@
 // notepad.exe and probably a worse notepad++.
 
 class TextView {
+  // the |box_| are the layout dimensions.
   D2D1_SIZE_F box_;
+  // |cursor_| is relative to |full_text_| or |active_text_|.
   uint32_t cursor_;
+  // the character that starts the next line. Layout always starts here.
   size_t start_;
+  // the end is either the smaller of string size or 8KB.
   size_t end_;
+  // the start and end positions from |full_text_| where |active_text_| was copied from.
   size_t active_start_;
   size_t active_end_;
+  // stores previous values of |start_| when we scroll down. It allows to cheaply scroll up.
   std::vector<size_t> starts_;
+  // stores the text as it should be on disk. If edits are in play it might be incomplete.
   std::unique_ptr<std::wstring> full_text_;
+  // keeps the active text modifications, it is sort of a "delta" from |full_text_|.
   std::unique_ptr<std::wstring> active_text_;
+  // used to compute the next line when we scroll down.
   std::vector<DWRITE_LINE_METRICS> line_metrics_;
+  // the 3 directwrite objects are necessary for layout and rendering.
   plx::ComPtr<IDWriteTextLayout> dwrite_layout_;
   plx::ComPtr<IDWriteFactory> dwrite_factory_;
   plx::ComPtr<IDWriteTextFormat> dwrite_fmt_;
 
+  // non-copiable.
   TextView& operator=(const TextView&) = delete;
   TextView(const TextView&) = delete;
 
@@ -71,7 +82,9 @@ public:
   void move_v_scroll(int v_offset) {
     if (v_offset == 0)
       return;
- 
+    // scroll is fairly different going fwd than going backward. Going fwd requires
+    // calling GetLineMetrics() and finding the character where the n-th line begins
+    // while scrolling backwards requires looking at the |starts_| vector.
     if (v_offset < 0) {
       v_offset = -v_offset;
       if (v_offset > starts_.size())
@@ -113,52 +126,60 @@ public:
     return true;
   }
 
+  // draws everything.
   void draw(ID2D1DeviceContext* dc,
             ID2D1Brush* text_brush,
             ID2D1Brush* caret_brush,
             ID2D1Brush* line_brush) {
-
+    // layout on demand.
     if (!dwrite_layout_) {
       update_layout();
     }
-
-    auto point = D2D1::Point2F();
-    dc->DrawTextLayout(point, dwrite_layout_.Get(), text_brush);
+    // the start of the text depends not of the device context transform but
+    // on the |start_| of the text.
+    dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), text_brush);
     draw_caret(dc, caret_brush, line_brush);
   }
 
 private:
+  // we change view when we scroll. |from| is always a line start.
   void change_view(size_t from) {
+    // we always merge the modified text back before scrolling. This can be
+    // expensive if we are talking many MB of text in |full_text_|.
      merge_active_text();
-
+    
     if (from > full_text_->size())
       __debugbreak();
-
+    // |full_text_| is up to date and |active_text_| should be gone.
     start_ = from;
     end_ = from + std::min(size_t(1024 * 8), full_text_->size() - from);
   }
 
+  // the user has made a text modification, we store and layout now from the
+  // |active_text_| until we scroll.
   void make_active_text() {
     if (active_text_)
       return;
-
+    // remember the range we copied, which we need to use when we merge.
     active_start_ = start_;
     active_end_ = end_;
-
+    // offset the cursor since are operating on |active_text_|.
     cursor_ += plx::To<uint32_t>(start_);
-
+    // slice full_text now.
     active_text_ = std::make_unique<std::wstring>(
         full_text_->substr(active_start_, active_end_ - active_start_));
   }
 
+  // the user is scrolling or saving, we need to have |full_text_| be the sole
+  // source of truth.
   void merge_active_text() {
     if (!active_text_)
       return;
     if (active_text_->empty())
       return;
-
+    // undo the offset done in make_active_text().
     cursor_ -= plx::To<uint32_t>(active_start_);
-
+    // This is slow if many MB are stored in |full_text_|. 
     full_text_->erase(active_start_, active_end_ - active_start_);
     full_text_->insert(start_, *active_text_);
     active_text_.reset();
@@ -171,9 +192,11 @@ private:
   void update_layout() {
     plx::Range<const wchar_t> txt;
     if (!active_text_) {
+      // layout from |full_text_|
       txt = plx::Range<const wchar_t>(&(*full_text_)[0] + start_,
                                       &(*full_text_)[0] + end_);
     } else {
+      // layout from |active_text_|
       txt = plx::Range<const wchar_t>(active_text_->c_str(), active_text_->size());
     }
     dwrite_layout_ = plx::CreateDWTextLayout(dwrite_factory_, dwrite_fmt_, txt, box_);
@@ -181,15 +204,11 @@ private:
   }
 
   void draw_caret(ID2D1DeviceContext* dc, ID2D1Brush* caret_brush, ID2D1Brush* line_brush) {
-    auto view_cursor = cursor_ - plx::To<uint32_t>(start_);
-
-#if 1
     if (cursor_ < start_)
       return;
     if (cursor_ > end_)
       return;
-#endif
-
+    auto view_cursor = cursor_ - plx::To<uint32_t>(start_);
     auto aa_mode = dc->GetAntialiasMode();
     dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
     DWRITE_HIT_TEST_METRICS hit_metrics;
