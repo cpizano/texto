@@ -145,7 +145,7 @@ private:
     active_start_ = start_;
     active_end_ = end_;
 
-    cursor_ -= plx::To<uint32_t>(start_);
+    cursor_ += plx::To<uint32_t>(start_);
 
     active_text_ = std::make_unique<std::wstring>(
         full_text_->substr(active_start_, active_end_ - active_start_));
@@ -157,7 +157,7 @@ private:
     if (active_text_->empty())
       return;
 
-    cursor_ += plx::To<uint32_t>(active_start_);
+    cursor_ -= plx::To<uint32_t>(active_start_);
 
     full_text_->erase(active_start_, active_end_ - active_start_);
     full_text_->insert(start_, *active_text_);
