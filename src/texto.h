@@ -15,6 +15,8 @@ class TextView {
   D2D1_SIZE_F box_;
   // |cursor_| is relative to |full_text_| or |active_text_|.
   int32_t cursor_;
+  // when scrolling the previous cursor X coordinate.
+  float cursor_ideal_x_;
   // the character that starts the next line. Layout always starts here.
   size_t start_;
   // the end is either the smaller of string size or 8KB.
@@ -43,7 +45,7 @@ public:
   TextView(plx::ComPtr<IDWriteFactory> dwrite_factory,
            plx::ComPtr<IDWriteTextFormat> dwrite_fmt) 
       : box_(D2D1::SizeF()),
-        cursor_(0),
+        cursor_(0), cursor_ideal_x_(-1.0f),
         start_(0), end_(0),
         active_start_(0), active_end_(0),
         dwrite_factory_(dwrite_factory),
@@ -55,7 +57,7 @@ public:
            plx::ComPtr<IDWriteTextFormat> dwrite_fmt,
            std::unique_ptr<std::wstring> text) 
       : box_(D2D1::SizeF()),
-        cursor_(0),
+        cursor_(0), cursor_ideal_x_(-1.0f),
         start_(0), end_(0),
         active_start_(0), active_end_(0),
         dwrite_factory_(dwrite_factory),
@@ -73,12 +75,26 @@ public:
     if (cursor_ == 0)
       return;
     --cursor_;
+    save_cursor_ideal_x();
   }
 
   void move_cursor_right() {
     if (cursor_ == end_)
       return;
     ++cursor_;
+    save_cursor_ideal_x();
+  }
+
+  void move_cursor_down() {
+    if (cursor_ == end_)
+      return;
+    cursor_ = cursor_at_line_offset(1);
+  }
+
+  void move_cursor_up() {
+    if (cursor_ == 0)
+      return;
+    cursor_ = cursor_at_line_offset(-1);
   }
 
   void move_v_scroll(int v_offset) {
@@ -239,6 +255,35 @@ private:
       __debugbreak();
 
     return metrics;
+  }
+
+  void save_cursor_ideal_x() {
+    DWRITE_HIT_TEST_METRICS hit_metrics;
+    float x, y;
+    auto hr = dwrite_layout_->HitTestTextPosition(cursor_, FALSE, &x, &y, &hit_metrics);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+    cursor_ideal_x_ = x;
+  }
+
+  int32_t cursor_at_line_offset(int32_t delta) {
+    DWRITE_HIT_TEST_METRICS hit_metrics;
+    float x, y;
+    auto hr = dwrite_layout_->HitTestTextPosition(cursor_, FALSE, &x, &y, &hit_metrics);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+
+    if (cursor_ideal_x_ > 0.0f)
+      x = cursor_ideal_x_;
+
+    BOOL is_trailing;
+    BOOL is_inside;
+    hr = dwrite_layout_->HitTestPoint(x, y + (hit_metrics.height * delta),
+                                      &is_trailing, &is_inside,
+                                      &hit_metrics);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+    return hit_metrics.textPosition;
   }
 
 };

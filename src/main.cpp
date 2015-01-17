@@ -428,10 +428,10 @@ public:
     } else if (vkey == VK_RIGHT) {
       textview_->move_cursor_right();
     } else if (vkey == VK_UP) {
-
+      textview_->move_cursor_up();
     }
     else if (vkey == VK_DOWN) {
-
+      textview_->move_cursor_down();
     } else {
       return 0L;
     }
