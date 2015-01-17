@@ -14,7 +14,7 @@ class TextView {
   // the |box_| are the layout dimensions.
   D2D1_SIZE_F box_;
   // |cursor_| is relative to |full_text_| or |active_text_|.
-  uint32_t cursor_;
+  int32_t cursor_;
   // the character that starts the next line. Layout always starts here.
   size_t start_;
   // the end is either the smaller of string size or 8KB.
@@ -148,11 +148,12 @@ private:
   void change_view(size_t from) {
     // we always merge the modified text back before scrolling. This can be
     // expensive if we are talking many MB of text in |full_text_|.
-     merge_active_text();
+    merge_active_text();
     
     if (from > full_text_->size())
       __debugbreak();
-    // |full_text_| is up to date and |active_text_| should be gone.
+
+    cursor_ -= plx::To<int32_t>(from) - plx::To<int32_t>(start_);
     start_ = from;
     end_ = from + std::min(size_t(1024 * 8), full_text_->size() - from);
   }
@@ -166,7 +167,6 @@ private:
     active_start_ = start_;
     active_end_ = end_;
     // offset the cursor since are operating on |active_text_|.
-    cursor_ += plx::To<uint32_t>(start_);
     // slice full_text now.
     active_text_ = std::make_unique<std::wstring>(
         full_text_->substr(active_start_, active_end_ - active_start_));
@@ -180,7 +180,6 @@ private:
     if (active_text_->empty())
       return;
     // undo the offset done in make_active_text().
-    cursor_ -= plx::To<uint32_t>(active_start_);
     // This is slow if many MB are stored in |full_text_|. 
     full_text_->erase(active_start_, active_end_ - active_start_);
     full_text_->insert(start_, *active_text_);
@@ -206,16 +205,15 @@ private:
   }
 
   void draw_caret(ID2D1DeviceContext* dc, ID2D1Brush* caret_brush, ID2D1Brush* line_brush) {
-    if (cursor_ < start_)
+    if (cursor_ < 0)
       return;
-    if (cursor_ > end_)
+    if (cursor_ > end_)  // $$ not quite the thight bound we want.
       return;
-    auto view_cursor = cursor_ - plx::To<uint32_t>(start_);
     auto aa_mode = dc->GetAntialiasMode();
     dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
     DWRITE_HIT_TEST_METRICS hit_metrics;
     float x, y;
-    auto hr = dwrite_layout_->HitTestTextPosition(view_cursor, FALSE, &x, &y, &hit_metrics);
+    auto hr = dwrite_layout_->HitTestTextPosition(cursor_, FALSE, &x, &y, &hit_metrics);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
     auto yf = y + hit_metrics.height;
