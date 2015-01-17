@@ -108,6 +108,29 @@ plx::ComPtr<ID2D1Geometry> CreateD2D1Geometry(
   return geometry;
 }
 
+class D2D1BrushManager {
+  std::vector<plx::ComPtr<ID2D1SolidColorBrush>> sb_;
+
+public:
+  D2D1BrushManager(size_t size) : sb_(size) {
+  }
+
+  void set_solid(ID2D1RenderTarget* rt, size_t index, uint32_t color, float alpha) {
+     auto hr = rt->CreateSolidColorBrush(D2D1::ColorF(color, alpha),
+                                         sb_[index].ReleaseAndGetAddressOf());
+     if (hr != S_OK)
+       throw plx::ComException(__LINE__, hr);
+  }
+
+  ID2D1SolidColorBrush* solid(size_t index) {
+    return sb_[index].Get();
+  }
+
+  void release_all() {
+    sb_.clear();
+  }
+};
+
 class PlainTextFileIO {
   const plx::FilePath path_;
   const size_t io_size = 32 * 1024;
@@ -221,7 +244,8 @@ class DCoWindow : public plx::Window <DCoWindow> {
     brush_sel,
     brush_last
   };
-  plx::ComPtr<ID2D1SolidColorBrush> brushes_[brush_last];
+  //plx::ComPtr<ID2D1SolidColorBrush> brushes_[brush_last];
+  D2D1BrushManager brushes_;
 
   plx::ComPtr<IDWriteTextLayout> title_layout_;
   std::unique_ptr<plx::FilePath> file_path_;
@@ -232,7 +256,8 @@ public:
   DCoWindow(int width, int height)
       : width_(width), height_(height),
         scroll_v_(0.0f),
-        scale_(D2D1::Matrix3x2F::Scale(1.0f, 1.0f)) {
+        scale_(D2D1::Matrix3x2F::Scale(1.0f, 1.0f)),
+        brushes_(brush_last) {
     // $$ read from config.
     margin_tl_ = D2D1::Point2F(22.0f, 36.0f);
     margin_br_ = D2D1::Point2F(16.0f, 16.0f);
@@ -299,20 +324,13 @@ public:
     {
       plx::ScopedD2D1DeviceContext dc(root_surface_, zero_offset, dpi(), nullptr);
       // create solid brushes.
-      dc()->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black, 1.0f), 
-          brushes_[brush_black].GetAddressOf());
-      dc()->CreateSolidColorBrush(D2D1::ColorF(0xBD4B5B, 1.0f), 
-          brushes_[brush_red].GetAddressOf());
-      dc()->CreateSolidColorBrush(D2D1::ColorF(0x1E5D81, 1.0f), 
-          brushes_[brush_blue].GetAddressOf());
-      dc()->CreateSolidColorBrush(D2D1::ColorF(RGB(74, 174, 0), 1.0),
-          brushes_[brush_green].GetAddressOf());
-      dc()->CreateSolidColorBrush(D2D1::ColorF(0xD68739, 1.0f), 
-          brushes_[brush_text].GetAddressOf());
-      dc()->CreateSolidColorBrush(D2D1::ColorF(0xD68739, 0.1f),
-          brushes_[brush_sline].GetAddressOf());
-      dc()->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::LightGray, 0.8f),
-          brushes_[brush_sel].GetAddressOf());
+      brushes_.set_solid(dc(), brush_black, D2D1::ColorF::Black, 1.0f);
+      brushes_.set_solid(dc(), brush_red, 0xBD4B5B, 1.0f);
+      brushes_.set_solid(dc(), brush_blue, 0x1E5D81, 1.0f);
+      brushes_.set_solid(dc(), brush_green, RGB(74, 174, 0), 1.0f);
+      brushes_.set_solid(dc(), brush_text, 0xD68739, 1.0f);
+      brushes_.set_solid(dc(), brush_sline, 0xD68739, 0.1f);
+      brushes_.set_solid(dc(), brush_sel, D2D1::ColorF::LightGray, 0.8f);
     }
 
     textview_ = new TextView(dwrite_factory_, text_fmt_[fmt_mono_text]);
@@ -628,16 +646,16 @@ public:
     for (auto& cm : metrics) {
       ID2D1Brush* brush = nullptr;
       if (cm.isNewline) {
-        brush = brushes_[brush_blue].Get();
+        brush = brushes_.solid(brush_blue);
         width = 3.0f;
         height = 3.0f;
         x_offset = 1.0f;
       } else if (cm.isWhitespace) {
-        brush = brushes_[brush_blue].Get();
+        brush = brushes_.solid(brush_blue);
         height = 1.0f;
         if (cm.width == 0) {
           // control char (rare, possibly a bug).
-          brush = brushes_[brush_green].Get();
+          brush = brushes_.solid(brush_green);
           width = 2.0f;
           height = -5.0f;
           x_offset = cm.width / 3.0f;
@@ -680,21 +698,21 @@ public:
     auto x1 = x0 + hit_metrics.width;
     // active line.
     dc->FillRectangle(
-        D2D1::RectF(x0, y0, x1, y1), brushes_[brush_sel].Get());
+        D2D1::RectF(x0, y0, x1, y1), brushes_.solid(brush_sel));
     dc->SetAntialiasMode(aa_mode);
   }
 
   void draw_frame(ID2D1DeviceContext* dc) {
     // draw widgets.
-    dc->DrawGeometry(circle_geom_move_.Get(), brushes_[brush_blue].Get(), 4.0f);
-    dc->DrawGeometry(circle_geom_close_.Get(), brushes_[brush_red].Get(), 4.0f);
+    dc->DrawGeometry(circle_geom_move_.Get(), brushes_.solid(brush_blue), 4.0f);
+    dc->DrawGeometry(circle_geom_close_.Get(), brushes_.solid(brush_red), 4.0f);
     // draw title.
     dc->DrawTextLayout(D2D1::Point2F(margin_tl_.x, widget_pos_.y - widget_radius_.y),
-                       title_layout_.Get(), brushes_[brush_green].Get());
+                       title_layout_.Get(), brushes_.solid(brush_green));
     // draw left margin.
     dc->DrawLine(D2D1::Point2F(margin_tl_.x, margin_tl_.y),
                  D2D1::Point2F(margin_tl_.x, height_ - margin_br_.y),
-                 brushes_[brush_blue].Get(), 0.5f);
+                 brushes_.solid(brush_blue), 0.5f);
   }
 
   void update_screen() {
@@ -710,13 +728,13 @@ public:
       if (scroll_v_ < 0) {
         dc()->DrawLine(D2D1::Point2F(0.0f, -8.0f),
                        D2D1::Point2F(static_cast<float>(width_), -8.0f),
-                       brushes_[brush_blue].Get(), 0.5f);
+                       brushes_.solid(brush_blue), 0.5f);
       }
  
       textview_->draw(dc(),
-          brushes_[brush_text].Get(),
-          brushes_[brush_red].Get(),
-          brushes_[brush_sline].Get(),
+          brushes_.solid(brush_text),
+          brushes_.solid(brush_red),
+          brushes_.solid(brush_sline),
           TextView::normal);
 
     }
