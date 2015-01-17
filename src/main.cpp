@@ -714,7 +714,10 @@ public:
       }
  
       textview_->draw(dc(),
-          brushes_[brush_text].Get(), brushes_[brush_red].Get(), brushes_[brush_sline].Get());
+          brushes_[brush_text].Get(),
+          brushes_[brush_red].Get(),
+          brushes_[brush_sline].Get(),
+          TextView::normal);
 
     }
     dco_device_->Commit();

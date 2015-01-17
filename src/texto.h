@@ -144,11 +144,17 @@ public:
     return true;
   }
 
+  enum DrawOptions {
+    normal,
+    draw_marks,
+  };
+
   // draws everything.
   void draw(ID2D1DeviceContext* dc,
             ID2D1Brush* text_brush,
             ID2D1Brush* caret_brush,
-            ID2D1Brush* line_brush) {
+            ID2D1Brush* line_brush,
+            DrawOptions options) {
     // layout on demand.
     if (!dwrite_layout_) {
       update_layout();
