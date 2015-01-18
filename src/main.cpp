@@ -212,10 +212,9 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<IDWriteTextFormat> text_fmt_[fmt_last];
 
   enum Brushes {
-    brush_black,
     brush_red,
     brush_blue,
-    brush_green,
+    brush_frame,
     brush_text,
     brush_sline,
     brush_sel,
@@ -301,10 +300,9 @@ public:
     {
       plx::ScopedD2D1DeviceContext dc(root_surface_, zero_offset, dpi(), nullptr);
       // create solid brushes.
-      brushes_.set_solid(dc(), brush_black, D2D1::ColorF::Black, 1.0f);
       brushes_.set_solid(dc(), brush_red, 0xBD4B5B, 1.0f);
       brushes_.set_solid(dc(), brush_blue, 0x1E5D81, 1.0f);
-      brushes_.set_solid(dc(), brush_green, 0x00AE4A, 1.0f);
+      brushes_.set_solid(dc(), brush_frame, 0x00AE4A, 1.0f);
       brushes_.set_solid(dc(), brush_text, 0xD68739, 1.0f);
       brushes_.set_solid(dc(), brush_sline, 0xD68739, 0.1f);
       brushes_.set_solid(dc(), brush_sel, D2D1::ColorF::LightGray, 0.8f);
@@ -632,7 +630,7 @@ public:
         height = 1.0f;
         if (cm.width == 0) {
           // control char (rare, possibly a bug).
-          brush = brushes_.solid(brush_green);
+          brush = brushes_.solid(brush_frame);
           width = 2.0f;
           height = -5.0f;
           x_offset = cm.width / 3.0f;
@@ -685,7 +683,7 @@ public:
     dc->DrawGeometry(circle_geom_close_.Get(), brushes_.solid(brush_red), 4.0f);
     // draw title.
     dc->DrawTextLayout(D2D1::Point2F(margin_tl_.x, widget_pos_.y - widget_radius_.y),
-                       title_layout_.Get(), brushes_.solid(brush_green));
+                       title_layout_.Get(), brushes_.solid(brush_frame));
     // draw left margin.
     dc->DrawLine(D2D1::Point2F(margin_tl_.x, margin_tl_.y),
                  D2D1::Point2F(margin_tl_.x, height_ - margin_br_.y),
