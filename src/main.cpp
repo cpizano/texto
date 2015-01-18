@@ -108,29 +108,6 @@ plx::ComPtr<ID2D1Geometry> CreateD2D1Geometry(
   return geometry;
 }
 
-class D2D1BrushManager {
-  std::vector<plx::ComPtr<ID2D1SolidColorBrush>> sb_;
-
-public:
-  D2D1BrushManager(size_t size) : sb_(size) {
-  }
-
-  void set_solid(ID2D1RenderTarget* rt, size_t index, uint32_t color, float alpha) {
-     auto hr = rt->CreateSolidColorBrush(D2D1::ColorF(color, alpha),
-                                         sb_[index].ReleaseAndGetAddressOf());
-     if (hr != S_OK)
-       throw plx::ComException(__LINE__, hr);
-  }
-
-  ID2D1SolidColorBrush* solid(size_t index) {
-    return sb_[index].Get();
-  }
-
-  void release_all() {
-    sb_.clear();
-  }
-};
-
 class PlainTextFileIO {
   const plx::FilePath path_;
   const size_t io_size = 32 * 1024;
@@ -245,7 +222,7 @@ class DCoWindow : public plx::Window <DCoWindow> {
     brush_last
   };
   //plx::ComPtr<ID2D1SolidColorBrush> brushes_[brush_last];
-  D2D1BrushManager brushes_;
+  plx::D2D1BrushManager brushes_;
 
   plx::ComPtr<IDWriteTextLayout> title_layout_;
   std::unique_ptr<plx::FilePath> file_path_;
@@ -327,7 +304,7 @@ public:
       brushes_.set_solid(dc(), brush_black, D2D1::ColorF::Black, 1.0f);
       brushes_.set_solid(dc(), brush_red, 0xBD4B5B, 1.0f);
       brushes_.set_solid(dc(), brush_blue, 0x1E5D81, 1.0f);
-      brushes_.set_solid(dc(), brush_green, RGB(74, 174, 0), 1.0f);
+      brushes_.set_solid(dc(), brush_green, 0x00AE4A, 1.0f);
       brushes_.set_solid(dc(), brush_text, 0xD68739, 1.0f);
       brushes_.set_solid(dc(), brush_sline, 0xD68739, 0.1f);
       brushes_.set_solid(dc(), brush_sel, D2D1::ColorF::LightGray, 0.8f);
