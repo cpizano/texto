@@ -116,23 +116,12 @@ public:
   PlainTextFileIO(plx::FilePath& path) : path_(path) {
   }
 
-  void save(std::vector<TextBlock>& text) {
+  void save() {
     auto file = plx::File::Create(
         path_, 
         plx::FileParams::ReadWrite_SharedRead(CREATE_ALWAYS),
         plx::FileSecurity());
-
-    std::wstring content;
-    for (auto& block : text) {
-      content.append(*block.text);
-      content.append(1, L'\n');
-      if (content.size() > io_size) {
-        block_to_disk(file, content);
-        content.clear();
-      }
-    }
-    if (!content.empty())
-      block_to_disk(file, content);
+    // $$$ use block_to_disk to save here.
   }
 
   std::unique_ptr<std::wstring> load() {
