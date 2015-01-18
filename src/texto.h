@@ -43,27 +43,20 @@ class TextView {
 
 public:
   TextView(plx::ComPtr<IDWriteFactory> dwrite_factory,
-           plx::ComPtr<IDWriteTextFormat> dwrite_fmt) 
-      : box_(D2D1::SizeF()),
-        cursor_(0), cursor_ideal_x_(-1.0f),
-        start_(0), end_(0),
-        active_start_(0), active_end_(0),
-        dwrite_factory_(dwrite_factory),
-        dwrite_fmt_(dwrite_fmt) {
-    full_text_ = std::make_unique<std::wstring>();
-  }
-
-  TextView(plx::ComPtr<IDWriteFactory> dwrite_factory,
            plx::ComPtr<IDWriteTextFormat> dwrite_fmt,
-           std::unique_ptr<std::wstring> text) 
+           std::wstring* text) 
       : box_(D2D1::SizeF()),
         cursor_(0), cursor_ideal_x_(-1.0f),
         start_(0), end_(0),
         active_start_(0), active_end_(0),
         dwrite_factory_(dwrite_factory),
         dwrite_fmt_(dwrite_fmt) {
-    full_text_ = std::move(text);
-    change_view(0);
+    if (text) {
+      full_text_.reset(text);
+      change_view(0);
+    } else {
+      full_text_ = std::make_unique<std::wstring>();
+    }
   }
 
   void set_size(uint32_t width, uint32_t height) {

@@ -226,7 +226,7 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<IDWriteTextLayout> title_layout_;
   std::unique_ptr<plx::FilePath> file_path_;
 
-  TextView* textview_;
+  std::unique_ptr<TextView> textview_;
 
 public:
   DCoWindow(int width, int height)
@@ -308,9 +308,7 @@ public:
       brushes_.set_solid(dc(), brush_sel, D2D1::ColorF::LightGray, 0.8f);
     }
 
-    textview_ = new TextView(dwrite_factory_, text_fmt_[fmt_mono_text]);
-    textview_->set_size(width_ - (22 + 16), height_ - (36 + 16));
-    
+    make_textview(nullptr);
     update_title();
     update_screen();
   }
@@ -569,9 +567,7 @@ public:
         return 0L;
       
       PlainTextFileIO ptfio(dialog.path());
-      delete textview_;
-      textview_ = new TextView(dwrite_factory_, text_fmt_[fmt_mono_text], ptfio.load());
-      textview_->set_size(width_ - (22 + 16), height_ - (36 + 16));
+      make_textview(ptfio.load().release());
       
       file_path_ = std::make_unique<plx::FilePath>(dialog.path());
       update_title();
@@ -579,6 +575,11 @@ public:
 
     update_screen();
     return 0L;
+  }
+
+  void make_textview(std::wstring* text) {
+    textview_ = std::make_unique<TextView>(dwrite_factory_, text_fmt_[fmt_mono_text], text);
+    textview_->set_size(width_ - (22 + 16), height_ - (36 + 16));
   }
 
   void add_character(wchar_t ch) {
