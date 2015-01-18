@@ -139,7 +139,7 @@ public:
 
   enum DrawOptions {
     normal,
-    draw_marks,
+    show_marks,
   };
 
   enum DrawBrushes {
@@ -164,9 +164,22 @@ public:
     // on the |start_| of the text.
     dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), brush.solid(brush_text));
     draw_caret(dc, brush.solid(brush_caret), brush.solid(brush_line));
+    if (options == show_marks) {
+      draw_marks(dc, 
+                 brush.solid(brush_lf),
+                 brush.solid(brush_space),
+                 brush.solid(brush_control));
+    }
   }
 
 private:
+  wchar_t char_at(uint32_t offset) {
+    if (!active_text_)
+      return full_text_->at(start_ + offset);
+    else
+      return active_text_->at(offset);
+  }
+
   // we change view when we scroll. |from| is always a line start.
   void change_view(size_t from) {
     // we always merge the modified text back before scrolling. This can be
@@ -248,6 +261,68 @@ private:
     dc->FillRectangle(
         D2D1::RectF(0, y, box_.width, yf), line_brush);
     dc->SetAntialiasMode(aa_mode);
+  }
+
+  void draw_marks(ID2D1DeviceContext* dc,
+                  ID2D1Brush* lf_brush, ID2D1Brush* space_brush, ID2D1Brush* control_brush) {
+    uint32_t count = 0;
+    auto hr = dwrite_layout_->GetClusterMetrics(nullptr,  0, &count);
+    if (hr == S_OK)
+      return;
+
+    if (hr != E_NOT_SUFFICIENT_BUFFER) {
+      __debugbreak();
+    }
+    std::vector<DWRITE_CLUSTER_METRICS> metrics(count);
+    hr = dwrite_layout_->GetClusterMetrics(&metrics[0], count, &count);
+    if (hr != S_OK) {
+      __debugbreak();
+    }
+
+    uint32_t offset = 0;
+    float width = 0.0f;
+    float height = 0.0f;
+    float x_offset = 0.0f;
+
+    for (auto& cm : metrics) {
+      ID2D1Brush* brush = nullptr;
+      if (cm.isNewline) {
+        brush = lf_brush;
+        width = 3.0f;
+        height = 3.0f;
+        x_offset = 1.0f;
+      } else if (cm.isWhitespace) {
+        brush = space_brush;
+        height = 1.0f;
+        if (cm.width == 0) {
+          // control char (rare, possibly a bug).
+          brush = control_brush;
+          width = 2.0f;
+          height = -5.0f;
+          x_offset = cm.width / 3.0f;
+        } else if (char_at(offset) == L'\t') {
+          // tab.
+          x_offset = cm.width / 8.0f;
+          width = cm.width - (2 * x_offset); 
+        } else {
+          // space.
+          width = 1.0f;
+          x_offset = cm.width / 3.0f;
+        }
+      }
+
+      if (brush) {
+        DWRITE_HIT_TEST_METRICS hit_metrics;
+        float x, y;
+        hr = dwrite_layout_->HitTestTextPosition(offset, FALSE, &x, &y, &hit_metrics);
+        if (hr != S_OK)
+          __debugbreak();
+        y += (2.0f * hit_metrics.height) / 3.0f;
+        x += x_offset;
+        dc->DrawRectangle(D2D1::RectF(x, y, x + width, y + height), brush);
+      }
+      offset += cm.length;
+    }
   }
 
   std::vector<DWRITE_LINE_METRICS> get_line_metrics() {

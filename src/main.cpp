@@ -309,6 +309,10 @@ public:
       text_brushes_.set_solid(dc(), TextView::brush_text, 0xD68739, 1.0f);
       text_brushes_.set_solid(dc(), TextView::brush_caret, 0xBD4B5B, 1.0f);
       text_brushes_.set_solid(dc(), TextView::brush_line, 0xD68739, 0.1f);
+
+      text_brushes_.set_solid(dc(), TextView::brush_control, 0xBD4B5B, 1.0f);
+      text_brushes_.set_solid(dc(), TextView::brush_lf, 0x1E5D81, 1.0f);
+      text_brushes_.set_solid(dc(), TextView::brush_space, 0x1E5D81, 1.0f);
     }
 
     make_textview(nullptr);
@@ -602,67 +606,6 @@ public:
     return false;
   }
 
-  void draw_marks(ID2D1DeviceContext* dc, IDWriteTextLayout* tl, const wchar_t* text) {
-    uint32_t count = 0;
-    auto hr = tl->GetClusterMetrics(nullptr,  0, &count);
-    if (hr == S_OK)
-      return;
-
-    if (hr != E_NOT_SUFFICIENT_BUFFER) {
-      __debugbreak();
-    }
-    std::vector<DWRITE_CLUSTER_METRICS> metrics(count);
-    hr = tl->GetClusterMetrics(&metrics[0], count, &count);
-    if (hr != S_OK) {
-      __debugbreak();
-    }
-
-    uint32_t offset = 0;
-    float width = 0.0f;
-    float height = 0.0f;
-    float x_offset = 0.0f;
-
-    for (auto& cm : metrics) {
-      ID2D1Brush* brush = nullptr;
-      if (cm.isNewline) {
-        brush = brushes_.solid(brush_blue);
-        width = 3.0f;
-        height = 3.0f;
-        x_offset = 1.0f;
-      } else if (cm.isWhitespace) {
-        brush = brushes_.solid(brush_blue);
-        height = 1.0f;
-        if (cm.width == 0) {
-          // control char (rare, possibly a bug).
-          brush = brushes_.solid(brush_frame);
-          width = 2.0f;
-          height = -5.0f;
-          x_offset = cm.width / 3.0f;
-        } else if (text[offset] == L'\t') {
-          // tab.
-          x_offset = cm.width / 8.0f;
-          width = cm.width - (2 * x_offset); 
-        } else {
-          // space.
-          width = 1.0f;
-          x_offset = cm.width / 3.0f;
-        }
-      }
-
-      if (brush) {
-        DWRITE_HIT_TEST_METRICS hit_metrics;
-        float x, y;
-        hr = tl->HitTestTextPosition(offset, FALSE, &x, &y, &hit_metrics);
-        if (hr != S_OK)
-          __debugbreak();
-        y += (2.0f * hit_metrics.height) / 3.0f;
-        x += x_offset;
-        dc->DrawRectangle(D2D1::RectF(x, y, x + width, y + height), brush);
-      }
-      offset += cm.length;
-    }
-  }
-
   void draw_selection(ID2D1DeviceContext* dc, IDWriteTextLayout* tl, Selection& sel) {
     if (sel.is_empty())
       return;
@@ -710,7 +653,8 @@ public:
                        brushes_.solid(brush_blue), 0.5f);
       }
  
-      textview_->draw(dc(), text_brushes_, TextView::normal);
+      auto mode = flag_options_[debug_text_boxes] ? TextView::show_marks : TextView::normal;
+      textview_->draw(dc(), text_brushes_, mode);
 
     }
     dco_device_->Commit();
