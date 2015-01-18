@@ -209,19 +209,19 @@ class DCoWindow : public plx::Window <DCoWindow> {
     fmt_title_right,
     fmt_last
   };
+
   plx::ComPtr<IDWriteTextFormat> text_fmt_[fmt_last];
 
   enum Brushes {
     brush_red,
     brush_blue,
     brush_frame,
-    brush_text,
-    brush_sline,
     brush_sel,
     brush_last
   };
-  //plx::ComPtr<ID2D1SolidColorBrush> brushes_[brush_last];
+
   plx::D2D1BrushManager brushes_;
+  plx::D2D1BrushManager text_brushes_;
 
   plx::ComPtr<IDWriteTextLayout> title_layout_;
   std::unique_ptr<plx::FilePath> file_path_;
@@ -233,7 +233,8 @@ public:
       : width_(width), height_(height),
         scroll_v_(0.0f),
         scale_(D2D1::Matrix3x2F::Scale(1.0f, 1.0f)),
-        brushes_(brush_last) {
+        brushes_(brush_last),
+        text_brushes_(TextView::brush_last) {
     // $$ read from config.
     margin_tl_ = D2D1::Point2F(22.0f, 36.0f);
     margin_br_ = D2D1::Point2F(16.0f, 16.0f);
@@ -303,9 +304,11 @@ public:
       brushes_.set_solid(dc(), brush_red, 0xBD4B5B, 1.0f);
       brushes_.set_solid(dc(), brush_blue, 0x1E5D81, 1.0f);
       brushes_.set_solid(dc(), brush_frame, 0x00AE4A, 1.0f);
-      brushes_.set_solid(dc(), brush_text, 0xD68739, 1.0f);
-      brushes_.set_solid(dc(), brush_sline, 0xD68739, 0.1f);
       brushes_.set_solid(dc(), brush_sel, D2D1::ColorF::LightGray, 0.8f);
+
+      text_brushes_.set_solid(dc(), TextView::brush_text, 0xD68739, 1.0f);
+      text_brushes_.set_solid(dc(), TextView::brush_caret, 0xBD4B5B, 1.0f);
+      text_brushes_.set_solid(dc(), TextView::brush_line, 0xD68739, 0.1f);
     }
 
     make_textview(nullptr);
@@ -707,11 +710,7 @@ public:
                        brushes_.solid(brush_blue), 0.5f);
       }
  
-      textview_->draw(dc(),
-          brushes_.solid(brush_text),
-          brushes_.solid(brush_red),
-          brushes_.solid(brush_sline),
-          TextView::normal);
+      textview_->draw(dc(), text_brushes_, TextView::normal);
 
     }
     dco_device_->Commit();

@@ -142,11 +142,19 @@ public:
     draw_marks,
   };
 
+  enum DrawBrushes {
+    brush_text,
+    brush_caret,
+    brush_line,
+    brush_control,
+    brush_lf,
+    brush_space,
+    brush_last
+  };
+
   // draws everything.
   void draw(ID2D1DeviceContext* dc,
-            ID2D1Brush* text_brush,
-            ID2D1Brush* caret_brush,
-            ID2D1Brush* line_brush,
+            plx::D2D1BrushManager& brush,
             DrawOptions options) {
     // layout on demand.
     if (!dwrite_layout_) {
@@ -154,8 +162,8 @@ public:
     }
     // the start of the text depends not of the device context transform but
     // on the |start_| of the text.
-    dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), text_brush);
-    draw_caret(dc, caret_brush, line_brush);
+    dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), brush.solid(brush_text));
+    draw_caret(dc, brush.solid(brush_caret), brush.solid(brush_line));
   }
 
 private:
