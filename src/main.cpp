@@ -606,24 +606,6 @@ public:
     return false;
   }
 
-  void draw_selection(ID2D1DeviceContext* dc, IDWriteTextLayout* tl, Selection& sel) {
-    if (sel.is_empty())
-      return;
-    auto aa_mode = dc->GetAntialiasMode();
-    dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
-    DWRITE_HIT_TEST_METRICS hit_metrics;
-    float x0, y0;
-    auto hr = tl->HitTestTextPosition(sel.start, FALSE, &x0, &y0, &hit_metrics);
-    if (hr != S_OK)
-      throw plx::ComException(__LINE__, hr);
-    auto y1 = y0 + hit_metrics.height;
-    auto x1 = x0 + hit_metrics.width;
-    // active line.
-    dc->FillRectangle(
-        D2D1::RectF(x0, y0, x1, y1), brushes_.solid(brush_sel));
-    dc->SetAntialiasMode(aa_mode);
-  }
-
   void draw_frame(ID2D1DeviceContext* dc) {
     // draw widgets.
     dc->DrawGeometry(circle_geom_move_.Get(), brushes_.solid(brush_blue), 4.0f);
