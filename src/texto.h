@@ -13,6 +13,8 @@
 class TextView {
   // the |box_| are the layout dimensions.
   D2D1_SIZE_F box_;
+  // approximate number of characters that fill |box_| given 8pt monospace font.
+  size_t block_size_;
   // |cursor_| is relative to |full_text_| or |active_text_|.
   int32_t cursor_;
   // when scrolling the previous cursor X coordinate.
@@ -46,6 +48,7 @@ public:
            plx::ComPtr<IDWriteTextFormat> dwrite_fmt,
            std::wstring* text) 
       : box_(D2D1::SizeF()),
+        block_size_(0),
         cursor_(0), cursor_ideal_x_(-1.0f),
         start_(0), end_(0),
         active_start_(0), active_end_(0),
@@ -53,14 +56,17 @@ public:
         dwrite_fmt_(dwrite_fmt) {
     if (text) {
       full_text_.reset(text);
-      change_view(0);
     } else {
       full_text_ = std::make_unique<std::wstring>();
     }
   }
 
   void set_size(uint32_t width, uint32_t height) {
+    // every 85 square pixels you need a character. Think of it as an educated guess, like
+    // a single character is 8.5 x 10 pixels in the worst case.
+    block_size_ = (width * height) / 85;
     box_ = D2D1::SizeF(static_cast<float>(width), static_cast<float>(height));
+    change_view(start_);
     invalidate();
   }
 
@@ -120,6 +126,10 @@ public:
   }
 
   void insert_char(wchar_t c) {
+    if (cursor_ < 0) {
+      // $$ move view to cursor.
+      return;
+    }
     make_active_text();
     active_text_->insert(cursor_, 1, c);
     ++cursor_;
@@ -191,7 +201,7 @@ private:
 
     cursor_ -= plx::To<int32_t>(from) - plx::To<int32_t>(start_);
     start_ = from;
-    end_ = from + std::min(size_t(1024 * 8), full_text_->size() - from);
+    end_ = from + std::min(block_size_, full_text_->size() - from);
   }
 
   // the user has made a text modification, we store and layout now from the

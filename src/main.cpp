@@ -509,7 +509,7 @@ public:
 
       scale_ = D2D1::Matrix3x2F::Scale(
           scalar_scale, scalar_scale, D2D1::Point2F(margin_tl_.x, 0));
-
+      set_textview_size();
       update_title();
 
     } else {
@@ -573,9 +573,15 @@ public:
     return 0L;
   }
 
+  void set_textview_size() {
+    auto w = (width_ - (22 + 16));
+    auto h = (height_ - (36 + 16)) / scale_._11;
+    textview_->set_size(w, static_cast<uint32_t>(h));
+  }
+
   void make_textview(std::wstring* text) {
     textview_ = std::make_unique<TextView>(dwrite_factory_, text_fmt_[fmt_mono_text], text);
-    textview_->set_size(width_ - (22 + 16), height_ - (36 + 16));
+    set_textview_size();
   }
 
   void add_character(wchar_t ch) {
