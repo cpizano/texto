@@ -96,6 +96,16 @@ public:
     cursor_ = cursor_at_line_offset(-1);
   }
 
+  void move_cursor_to(float x, float y) {
+    DWRITE_HIT_TEST_METRICS hit_metrics;
+    BOOL is_trailing;
+    BOOL is_inside;
+    auto hr = dwrite_layout_->HitTestPoint(x, y, &is_trailing, &is_inside, &hit_metrics);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+    cursor_ = hit_metrics.textPosition;
+  }
+
   void move_v_scroll(int v_offset) {
     if (v_offset == 0)
       return;

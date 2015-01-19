@@ -21,7 +21,7 @@ template <typename T> int sgn(T val) {
 }
 
 namespace ui_txt {
-  const wchar_t no_file_title[] = L"TExTO v0.0.0b <no file> [F2: open]\n";
+  const wchar_t no_file_title[] = L"TExTO v0.0.1a <no file> [F2: open]\n";
 }
 
 enum class HardFailures {
@@ -596,10 +596,10 @@ public:
   }
 
   bool move_cursor(POINTS pts) {
-    auto y = (pts.y / scale_._11)  + scroll_v_ - margin_tl_.y;
+    auto y = (pts.y / scale_._11) - margin_tl_.y;
     auto x = (pts.x - margin_tl_.x) / scale_._11;
-
-    return false;
+    textview_->move_cursor_to(x, y);
+    return true;
   }
 
   void draw_frame(ID2D1DeviceContext* dc) {
