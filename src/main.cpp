@@ -357,7 +357,7 @@ public:
         c = 0x1A;
     }
 
-    // $$ here add the text.
+    textview_->insert_text(str);
     update_screen();
     ::GlobalUnlock(gmem);
     return true;

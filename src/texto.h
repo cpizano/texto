@@ -147,6 +147,19 @@ public:
     invalidate();
   }
 
+  void insert_text(const std::wstring text) {
+    if (text.size() < 512) {
+      make_active_text();
+      active_text_->insert(cursor_, text);
+    } else {
+      merge_active_text();
+      full_text_->insert(start_ + cursor_, text);
+    }
+    cursor_ += plx::To<uint32_t>(text.size());
+    end_ += text.size();
+    invalidate();
+  }
+
   bool back_erase() {
     if (cursor_ <= 0)
       return false;
