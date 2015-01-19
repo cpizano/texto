@@ -106,7 +106,7 @@ public:
     cursor_ = hit_metrics.textPosition;
   }
 
-  void move_v_scroll(int v_offset) {
+  void v_scroll(int v_offset) {
     if (v_offset == 0)
       return;
     // scroll is fairly different going fwd than going backward. Going fwd requires

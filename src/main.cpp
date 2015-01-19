@@ -519,8 +519,8 @@ public:
         return 0L;
       scroll_v_ -= offset / 4;
 
-      auto lines = scale_._11 < 0.7 ? 3 : 1;
-      textview_->move_v_scroll(sgn(-offset) * lines);
+      auto lines = scale_._11 < 0.7 ? 5 : 2;
+      textview_->v_scroll(sgn(-offset) * lines);
     }
 
     update_screen();
