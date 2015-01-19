@@ -293,15 +293,14 @@ public:
       brushes_.set_solid(dc(), brush_red, 0xBD4B5B, 1.0f);
       brushes_.set_solid(dc(), brush_blue, 0x1E5D81, 1.0f);
       brushes_.set_solid(dc(), brush_frame, 0x00AE4A, 1.0f);
-      brushes_.set_solid(dc(), brush_sel, D2D1::ColorF::LightGray, 0.8f);
 
       text_brushes_.set_solid(dc(), TextView::brush_text, 0xD68739, 1.0f);
       text_brushes_.set_solid(dc(), TextView::brush_caret, 0xBD4B5B, 1.0f);
       text_brushes_.set_solid(dc(), TextView::brush_line, 0xD68739, 0.1f);
-
       text_brushes_.set_solid(dc(), TextView::brush_control, 0xBD4B5B, 1.0f);
       text_brushes_.set_solid(dc(), TextView::brush_lf, 0x1E5D81, 1.0f);
       text_brushes_.set_solid(dc(), TextView::brush_space, 0x1E5D81, 1.0f);
+      text_brushes_.set_solid(dc(), TextView::brush_selection, 0xD3D3D3, 0.8f);
     }
 
     make_textview(nullptr);
@@ -482,7 +481,7 @@ public:
   }
 
   LRESULT left_mouse_dblclick_handler(POINTS pts) {
-
+    textview_->select_word();
     update_screen();
     return 0L;
   }

@@ -10,6 +10,14 @@
 // TExTO, as a text editor, is still finding out who she is. It should straddle between a better
 // notepad.exe and probably a worse notepad++.
 
+struct Selection {
+  uint32_t start;
+  uint32_t end;
+
+  Selection() : start(0), end(0) {}
+  bool is_empty() { return start == end; }
+};
+
 class TextView {
   // the |box_| are the layout dimensions.
   D2D1_SIZE_F box_;
@@ -28,6 +36,8 @@ class TextView {
   size_t active_end_;
   // stores previous values of |start_| when we scroll down. It allows to cheaply scroll up.
   std::vector<size_t> starts_;
+  // the texr range for the interactive selection for copy & paste.
+  Selection selection_;
   // stores the text as it should be on disk. If edits are in play it might be incomplete.
   std::unique_ptr<std::wstring> full_text_;
   // keeps the active text modifications, it is sort of a "delta" from |full_text_|.
@@ -106,6 +116,14 @@ public:
     cursor_ = hit_metrics.textPosition;
   }
 
+  void select_word() {
+    auto cac = char_at(cursor_);
+    if ( cac > 0x30) {
+      selection_.start = cursor_;
+      selection_.end = cursor_ + 1;
+    }
+  }
+
   void v_scroll(int v_offset) {
     if (v_offset == 0)
       return;
@@ -182,10 +200,12 @@ public:
     brush_control,
     brush_lf,
     brush_space,
+    brush_selection,
     brush_last
   };
 
-  // draws everything.
+  // draws everything. Note that the start of the text depends not of the device context transform
+  // but on the |start_| of the text.
   void draw(ID2D1DeviceContext* dc,
             plx::D2D1BrushManager& brush,
             DrawOptions options) {
@@ -193,10 +213,13 @@ public:
     if (!dwrite_layout_) {
       update_layout();
     }
-    // the start of the text depends not of the device context transform but
-    // on the |start_| of the text.
+
+    draw_cursor_line(dc, brush.solid(brush_line));
+    draw_selection(dc, brush.solid(brush_selection));
     dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), brush.solid(brush_text));
-    draw_caret(dc, brush.solid(brush_caret), brush.solid(brush_line));
+    draw_caret(dc, brush.solid(brush_caret));
+
+    // debugging aids.
     if (options == show_marks) {
       draw_marks(dc, 
                  brush.solid(brush_lf),
@@ -273,26 +296,62 @@ private:
     line_metrics_ = get_line_metrics();
   }
 
-  void draw_caret(ID2D1DeviceContext* dc, ID2D1Brush* caret_brush, ID2D1Brush* line_brush) {
+  void draw_cursor_line(ID2D1DeviceContext* dc, ID2D1Brush* line_brush) {
+    draw_helper(dc, nullptr, line_brush);
+  }
+
+  void draw_caret(ID2D1DeviceContext* dc, ID2D1Brush* caret_brush) {
+    draw_helper(dc, caret_brush, nullptr);
+  }
+
+  void draw_helper(ID2D1DeviceContext* dc, ID2D1Brush* caret_brush, ID2D1Brush* line_brush) {
     if (cursor_ < 0)
       return;
     if (cursor_ > end_)  // $$ not quite the thight bound we want.
       return;
-    auto aa_mode = dc->GetAntialiasMode();
-    dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+
     DWRITE_HIT_TEST_METRICS hit_metrics;
     float x, y;
     auto hr = dwrite_layout_->HitTestTextPosition(cursor_, FALSE, &x, &y, &hit_metrics);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
     auto yf = y + hit_metrics.height;
-    // caret.
-    dc->DrawRectangle(
-        D2D1::RectF(x, y, x + 2.0f, yf), caret_brush, 1.0f);
+
+    auto aa_mode = dc->GetAntialiasMode();
+    dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+    if (caret_brush) {
+      // caret.
+      dc->DrawRectangle(
+          D2D1::RectF(x, y, x + 2.0f, yf), caret_brush, 1.0f);
+      dc->SetAntialiasMode(aa_mode);
+    }
+    if (line_brush) {
+      // active line.
+      dc->FillRectangle(D2D1::RectF(0, y, box_.width, yf), line_brush);
+    }
     dc->SetAntialiasMode(aa_mode);
-    // active line.
-    dc->FillRectangle(
-        D2D1::RectF(0, y, box_.width, yf), line_brush);
+  }
+
+
+  void draw_selection(ID2D1DeviceContext* dc, ID2D1Brush* sel_brush) {
+    if (selection_.is_empty())
+      return;
+
+    DWRITE_HIT_TEST_METRICS hitm0, hitm1;
+    float x0, x1, y0, y1;
+    auto hr = dwrite_layout_->HitTestTextPosition(selection_.start, TRUE, &x0, &y0, &hitm0);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+    hr = dwrite_layout_->HitTestTextPosition(selection_.start, FALSE, &x1, &y1, &hitm1);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+
+    auto yf = y0 + hitm0.height;
+
+    auto aa_mode = dc->GetAntialiasMode();
+    dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+    dc->FillRectangle(D2D1::RectF(x0, y0, x1, yf), sel_brush);
+
     dc->SetAntialiasMode(aa_mode);
   }
 
