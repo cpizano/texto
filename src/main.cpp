@@ -519,7 +519,8 @@ public:
         return 0L;
       scroll_v_ -= offset / 4;
 
-      textview_->move_v_scroll(sgn(-offset));
+      auto lines = scale_._11 < 0.7 ? 3 : 1;
+      textview_->move_v_scroll(sgn(-offset) * lines);
     }
 
     update_screen();
@@ -624,7 +625,7 @@ public:
       dc()->SetTransform(trans * scale_);
 
       // draw the start of text line marker.
-      if (scroll_v_ < 0) {
+      if (scroll_v_ <= 0) {
         dc()->DrawLine(D2D1::Point2F(0.0f, -8.0f),
                        D2D1::Point2F(static_cast<float>(width_), -8.0f),
                        brushes_.solid(brush_blue), 0.5f);
