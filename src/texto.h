@@ -11,11 +11,19 @@
 // notepad.exe and probably a worse notepad++.
 
 struct Selection {
-  uint32_t start;
-  uint32_t end;
+  size_t begin;
+  size_t end;
 
-  Selection() : start(0), end(0) {}
-  bool is_empty() { return start == end; }
+  Selection() : begin(0), end(0) {}
+  bool is_empty() { return begin == end; }
+
+  uint32_t get_relative_begin(size_t start) {
+    return plx::To<uint32_t>(begin - start);
+  }
+
+  uint32_t get_relative_end(size_t start) {
+    return plx::To<uint32_t>(end - start);
+  }
 };
 
 class TextView {
@@ -23,8 +31,8 @@ class TextView {
   D2D1_SIZE_F box_;
   // approximate number of characters that fill |box_| given 8pt monospace font.
   size_t block_size_;
-  // |cursor_| is relative to |full_text_| or |active_text_|.
-  int32_t cursor_;
+  // |cursor_| is absolute.
+  size_t cursor_;
   // when scrolling the previous cursor X coordinate.
   float cursor_ideal_x_;
   // the character that starts the next line. Layout always starts here.
@@ -113,13 +121,13 @@ public:
     auto hr = dwrite_layout_->HitTestPoint(x, y, &is_trailing, &is_inside, &hit_metrics);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
-    cursor_ = hit_metrics.textPosition;
+    cursor_ = hit_metrics.textPosition + start_;
   }
 
   void select_word() {
     auto cac = char_at(cursor_);
     if ( cac > 0x30) {
-      selection_.start = cursor_;
+      selection_.begin = cursor_;
       selection_.end = cursor_ + 1;
     }
   }
@@ -154,12 +162,12 @@ public:
   }
 
   void insert_char(wchar_t c) {
-    if (cursor_ < 0) {
+    if (cursor_ < start_) {
       // $$ move view to cursor.
       return;
     }
     make_active_text();
-    active_text_->insert(cursor_, 1, c);
+    active_text_->insert(relative_cursor(), 1, c);
     ++cursor_;
     ++end_;
     invalidate();
@@ -168,10 +176,10 @@ public:
   void insert_text(const std::wstring text) {
     if (text.size() < 512) {
       make_active_text();
-      active_text_->insert(cursor_, text);
+      active_text_->insert(relative_cursor(), text);
     } else {
       merge_active_text();
-      full_text_->insert(start_ + cursor_, text);
+      full_text_->insert(cursor_, text);
     }
     cursor_ += plx::To<uint32_t>(text.size());
     end_ += text.size();
@@ -182,7 +190,8 @@ public:
     if (cursor_ <= 0)
       return false;
     make_active_text();
-    active_text_->erase(--cursor_, 1);
+    --cursor_;
+    active_text_->erase(relative_cursor(), 1);
     --end_;
     invalidate();
     return true;
@@ -229,11 +238,16 @@ public:
   }
 
 private:
-  wchar_t char_at(uint32_t offset) {
+
+  uint32_t relative_cursor() {
+    return plx::To<uint32_t>(cursor_ - start_);
+  }
+
+  wchar_t char_at(size_t offset) {
     if (!active_text_)
-      return full_text_->at(start_ + offset);
+      return full_text_->at(offset);
     else
-      return active_text_->at(offset);
+      return active_text_->at(offset - start_);
   }
 
   // we change view when we scroll. |from| is always a line start.
@@ -245,7 +259,6 @@ private:
     if (from > full_text_->size())
       __debugbreak();
 
-    cursor_ -= plx::To<int32_t>(from) - plx::To<int32_t>(start_);
     start_ = from;
     end_ = from + std::min(block_size_, full_text_->size() - from);
   }
@@ -305,14 +318,13 @@ private:
   }
 
   void draw_helper(ID2D1DeviceContext* dc, ID2D1Brush* caret_brush, ID2D1Brush* line_brush) {
-    if (cursor_ < 0)
+    if (cursor_ < start_)
       return;
-    if (cursor_ > end_)  // $$ not quite the thight bound we want.
+    if (cursor_ > end_)
       return;
-
     DWRITE_HIT_TEST_METRICS hit_metrics;
     float x, y;
-    auto hr = dwrite_layout_->HitTestTextPosition(cursor_, FALSE, &x, &y, &hit_metrics);
+    auto hr = dwrite_layout_->HitTestTextPosition(relative_cursor(), FALSE, &x, &y, &hit_metrics);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
     auto yf = y + hit_metrics.height;
@@ -332,22 +344,22 @@ private:
     dc->SetAntialiasMode(aa_mode);
   }
 
-
   void draw_selection(ID2D1DeviceContext* dc, ID2D1Brush* sel_brush) {
     if (selection_.is_empty())
       return;
 
     DWRITE_HIT_TEST_METRICS hitm0, hitm1;
     float x0, x1, y0, y1;
-    auto hr = dwrite_layout_->HitTestTextPosition(selection_.start, TRUE, &x0, &y0, &hitm0);
+    auto hr = dwrite_layout_->HitTestTextPosition(
+        selection_.get_relative_begin(start_), FALSE, &x0, &y0, &hitm0);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
-    hr = dwrite_layout_->HitTestTextPosition(selection_.start, FALSE, &x1, &y1, &hitm1);
+    hr = dwrite_layout_->HitTestTextPosition(
+        selection_.get_relative_end(start_), FALSE, &x1, &y1, &hitm1);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
 
     auto yf = y0 + hitm0.height;
-
     auto aa_mode = dc->GetAntialiasMode();
     dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
     dc->FillRectangle(D2D1::RectF(x0, y0, x1, yf), sel_brush);
@@ -434,16 +446,16 @@ private:
   void save_cursor_ideal_x() {
     DWRITE_HIT_TEST_METRICS hit_metrics;
     float x, y;
-    auto hr = dwrite_layout_->HitTestTextPosition(cursor_, FALSE, &x, &y, &hit_metrics);
+    auto hr = dwrite_layout_->HitTestTextPosition(relative_cursor(), FALSE, &x, &y, &hit_metrics);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
     cursor_ideal_x_ = x;
   }
 
-  int32_t cursor_at_line_offset(int32_t delta) {
+  uint32_t cursor_at_line_offset(int32_t delta) {
     DWRITE_HIT_TEST_METRICS hit_metrics;
     float x, y;
-    auto hr = dwrite_layout_->HitTestTextPosition(cursor_, FALSE, &x, &y, &hit_metrics);
+    auto hr = dwrite_layout_->HitTestTextPosition(relative_cursor(), FALSE, &x, &y, &hit_metrics);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
 
@@ -457,7 +469,7 @@ private:
                                       &hit_metrics);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
-    return hit_metrics.textPosition;
+    return plx::To<uint32_t>(hit_metrics.textPosition + start_);
   }
 
 };
