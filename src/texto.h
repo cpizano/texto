@@ -126,10 +126,38 @@ public:
 
   void select_word() {
     auto cac = char_at(cursor_);
-    if ( cac > 0x30) {
+    if ( cac < 0x30) {
       selection_.begin = cursor_;
       selection_.end = cursor_ + 1;
+      return;
     }
+
+    auto center = cursor_;
+    std::wstring* str;
+    if (!active_text_) {
+      str = full_text_.get();
+    } else {
+      str = active_text_.get();
+      center -= start_;
+    }
+
+    // go left first.
+    auto left = center;
+    while (left != 0) {
+      if (str->at(left) < 0x30)
+        break;
+      --left;
+    }
+    // go right next.
+    auto right = center;
+    while (right != str->size()) {
+      if (str->at(right) < 0x30)
+        break;
+      ++right;
+    }
+
+    selection_.begin = active_text_ ? left + start_ : left;
+    selection_.end = active_text_ ? right + start_ : right;
   }
 
   void v_scroll(int v_offset) {
