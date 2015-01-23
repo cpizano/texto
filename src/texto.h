@@ -112,7 +112,7 @@ public:
     if (cursor_ == end_)
       return;
     if (!selection_.is_empty()) {
-      cursor_ = selection_.end + 1;
+      cursor_ = selection_.end;
       selection_.clear();
     } else {
       ++cursor_;
@@ -151,43 +151,44 @@ public:
 
     auto cac = char_at(cursor_);
     if ( cac < 0x30) {
+      // we are at a non printable char, just select it.
       selection_.begin = cursor_;
       selection_.end = cursor_ + 1;
-      return;
-    }
-
-    auto center = cursor_;
-    std::wstring* str;
-    if (!active_text_) {
-      str = full_text_.get();
     } else {
-      str = active_text_.get();
-      center -= start_;
+      // we are at a printable char, expand left and right.
+      auto center = cursor_;
+      std::wstring* str;
+      if (!active_text_) {
+        str = full_text_.get();
+      } else {
+        str = active_text_.get();
+        center -= start_;
+      }
+
+      // go left first.
+      auto left = center;
+      while (left != 0) {
+        if (str->at(left) < 0x30)
+          break;
+        --left;
+      }
+      // go right next.
+      auto right = center;
+      while (right != str->size()) {
+        if (str->at(right) < 0x30)
+          break;
+        ++right;
+      }
+
+      ++left;
+      if (left < right) {
+        selection_.begin = active_text_ ? left + start_ : left;
+        selection_.end = active_text_ ? right + start_ : right;
+      }
     }
 
-    // go left first.
-    auto left = center;
-    while (left != 0) {
-      if (str->at(left) < 0x30)
-        break;
-      --left;
-    }
-    // go right next.
-    auto right = center;
-    while (right != str->size()) {
-      if (str->at(right) < 0x30)
-        break;
-      ++right;
-    }
-
-    ++left;
-    --right;
-    if (left < right) {
-      selection_.begin = active_text_ ? left + start_ : left;
-      selection_.end = active_text_ ? right + start_ : right;
-      cursor_ = right + 1;
-      save_cursor_ideal_x();
-    }
+    cursor_ = selection_.end;
+    save_cursor_ideal_x();
   }
 
   void v_scroll(int v_offset) {
@@ -423,9 +424,8 @@ private:
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
 
-    auto trailing = selection_.lenght() == 1 ? FALSE : TRUE; 
     hr = dwrite_layout_->HitTestTextPosition(
-        selection_.get_relative_end(start_), trailing, &x1, &y1, &hitm1);
+        selection_.get_relative_end(start_), FALSE, &x1, &y1, &hitm1);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
 
