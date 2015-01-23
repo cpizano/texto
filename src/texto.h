@@ -24,6 +24,10 @@ struct Selection {
   uint32_t get_relative_end(size_t start) {
     return plx::To<uint32_t>(end - start);
   }
+
+  size_t lenght() {
+    return end - begin;
+  }
 };
 
 class TextView {
@@ -156,8 +160,13 @@ public:
       ++right;
     }
 
-    selection_.begin = active_text_ ? left + start_ : left;
-    selection_.end = active_text_ ? right + start_ : right;
+    ++left;
+    --right;
+    if (left < right) {
+      selection_.begin = active_text_ ? left + start_ : left;
+      selection_.end = active_text_ ? right + start_ : right;
+      cursor_ = right + 1;
+    }
   }
 
   void v_scroll(int v_offset) {
@@ -376,14 +385,19 @@ private:
     if (selection_.is_empty())
       return;
 
+    if (selection_.begin < start_)
+      return;
+
     DWRITE_HIT_TEST_METRICS hitm0, hitm1;
     float x0, x1, y0, y1;
     auto hr = dwrite_layout_->HitTestTextPosition(
         selection_.get_relative_begin(start_), FALSE, &x0, &y0, &hitm0);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
+
+    auto trailing = selection_.lenght() == 1 ? FALSE : TRUE; 
     hr = dwrite_layout_->HitTestTextPosition(
-        selection_.get_relative_end(start_), FALSE, &x1, &y1, &hitm1);
+        selection_.get_relative_end(start_), trailing, &x1, &y1, &hitm1);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
 
