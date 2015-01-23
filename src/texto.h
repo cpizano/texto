@@ -146,6 +146,9 @@ public:
   }
 
   void select_word() {
+    if (!cursor_in_text())
+      return;
+
     auto cac = char_at(cursor_);
     if ( cac < 0x30) {
       selection_.begin = cursor_;
@@ -296,6 +299,13 @@ private:
 
   uint32_t relative_cursor() {
     return plx::To<uint32_t>(cursor_ - start_);
+  }
+
+  bool cursor_in_text() {
+    if (!active_text_)
+      return cursor_  < full_text_->size();
+    else
+      return (cursor_ - start_) < active_text_->size();
   }
 
   wchar_t char_at(size_t offset) {
