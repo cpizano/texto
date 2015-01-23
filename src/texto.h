@@ -25,6 +25,10 @@ struct Selection {
     return plx::To<uint32_t>(end - start);
   }
 
+  void clear() {
+    begin = end = 0;
+  }
+
   size_t lenght() {
     return end - begin;
   }
@@ -95,30 +99,43 @@ public:
   void move_cursor_left() {
     if (cursor_ == 0)
       return;
-    --cursor_;
+    if (!selection_.is_empty()) {
+      cursor_ = selection_.begin;
+      selection_.clear();
+    } else {
+      --cursor_;
+    }
     save_cursor_ideal_x();
   }
 
   void move_cursor_right() {
     if (cursor_ == end_)
       return;
-    ++cursor_;
+    if (!selection_.is_empty()) {
+      cursor_ = selection_.end + 1;
+      selection_.clear();
+    } else {
+      ++cursor_;
+    }
     save_cursor_ideal_x();
   }
 
   void move_cursor_down() {
+    selection_.clear();
     if (cursor_ == end_)
       return;
     cursor_ = cursor_at_line_offset(1);
   }
 
   void move_cursor_up() {
+    selection_.clear();
     if (cursor_ == 0)
       return;
     cursor_ = cursor_at_line_offset(-1);
   }
 
   void move_cursor_to(float x, float y) {
+    selection_.clear();
     DWRITE_HIT_TEST_METRICS hit_metrics;
     BOOL is_trailing;
     BOOL is_inside;
@@ -166,6 +183,7 @@ public:
       selection_.begin = active_text_ ? left + start_ : left;
       selection_.end = active_text_ ? right + start_ : right;
       cursor_ = right + 1;
+      save_cursor_ideal_x();
     }
   }
 
