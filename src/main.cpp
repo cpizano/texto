@@ -466,7 +466,7 @@ public:
         ::SendMessageW(window(), WM_SYSCOMMAND, SC_MOVE|0x0002, 0);
       } else {
         // probably on the text. Move cursor there.
-        if (move_cursor(pts))
+        if (move_cursor(pts, false))
           update_screen();
       }
       
@@ -487,6 +487,11 @@ public:
   }
 
   LRESULT mouse_move_handler(UINT_PTR state, POINTS pts) {
+    if (state & MK_LBUTTON) {
+      // change selection.
+      if (move_cursor(pts, true))
+        update_screen();
+    }
     return 0L;
   }
 
@@ -594,10 +599,14 @@ public:
 
   }
 
-  bool move_cursor(POINTS pts) {
+  bool move_cursor(POINTS pts, bool is_selection) {
     auto y = (pts.y / scale_._11) - margin_tl_.y;
     auto x = (pts.x - margin_tl_.x) / scale_._11;
-    textview_->move_cursor_to(x, y);
+    if (is_selection) {
+      textview_->change_selection(x, y);
+    } else {
+      textview_->move_cursor_to(x, y);
+    }
     return true;
   }
 

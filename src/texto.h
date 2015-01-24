@@ -136,13 +136,14 @@ public:
 
   void move_cursor_to(float x, float y) {
     selection_.clear();
-    DWRITE_HIT_TEST_METRICS hit_metrics;
-    BOOL is_trailing;
-    BOOL is_inside;
-    auto hr = dwrite_layout_->HitTestPoint(x, y, &is_trailing, &is_inside, &hit_metrics);
-    if (hr != S_OK)
-      throw plx::ComException(__LINE__, hr);
-    cursor_ = hit_metrics.textPosition + start_;
+    cursor_ = text_position(x, y) + start_;
+  }
+
+  void change_selection(float x, float y) {
+    if (selection_.is_empty())
+      selection_.begin = cursor_;
+    cursor_ = text_position(x, y) + start_;
+    selection_.end = cursor_;
   }
 
   void select_word() {
@@ -538,14 +539,18 @@ private:
     if (cursor_ideal_x_ > 0.0f)
       x = cursor_ideal_x_;
 
+    auto text_pos = text_position(x, hit_metrics.height * delta);
+    return plx::To<uint32_t>(text_pos + start_);
+  }
+
+  uint32_t text_position(float x, float y) {
+    DWRITE_HIT_TEST_METRICS hit_metrics;
     BOOL is_trailing;
     BOOL is_inside;
-    hr = dwrite_layout_->HitTestPoint(x, y + (hit_metrics.height * delta),
-                                      &is_trailing, &is_inside,
-                                      &hit_metrics);
+    auto hr = dwrite_layout_->HitTestPoint(x, y, &is_trailing, &is_inside, &hit_metrics);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
-    return plx::To<uint32_t>(hit_metrics.textPosition + start_);
+    return hit_metrics.textPosition;
   }
 
 };
