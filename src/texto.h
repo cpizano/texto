@@ -249,9 +249,15 @@ public:
     if (cursor_ <= 0)
       return false;
     make_active_text();
-    --cursor_;
-    active_text_->erase(relative_cursor(), 1);
-    --end_;
+    if (!selection_.is_empty()) {
+      active_text_->erase(selection_.get_relative_begin(start_), selection_.lenght());
+      cursor_ = selection_.begin;
+      selection_.clear();
+    } else {
+      --cursor_;
+      active_text_->erase(relative_cursor(), 1);
+      --end_;
+    }
     invalidate();
     return true;
   }
