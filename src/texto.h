@@ -436,10 +436,21 @@ private:
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
 
-    auto yf = y0 + hitm0.height;
     auto aa_mode = dc->GetAntialiasMode();
     dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
-    dc->FillRectangle(D2D1::RectF(x0, y0, x1, yf), sel_brush);
+
+    auto yf0 = y0 + hitm0.height;
+    auto yf1 = y1 + hitm1.height;
+
+    if (y1 - y0 < 0.01) {
+      // single line select.
+      dc->FillRectangle(D2D1::RectF(x0, y0, x1, yf0), sel_brush);
+    } else {
+      // multi-line select.
+      dc->FillRectangle(D2D1::RectF(x0, y0, box_.width, yf0), sel_brush);
+      dc->FillRectangle(D2D1::RectF(0, yf0, box_.width, y1), sel_brush);
+      dc->FillRectangle(D2D1::RectF(0, y1, x1, yf1), sel_brush);
+    }
 
     dc->SetAntialiasMode(aa_mode);
   }
