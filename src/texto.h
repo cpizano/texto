@@ -140,10 +140,28 @@ public:
   }
 
   void change_selection(float x, float y) {
-    if (selection_.is_empty())
-      selection_.begin = cursor_;
+    auto prev_cursor = cursor_;
     cursor_ = text_position(x, y) + start_;
-    selection_.end = cursor_;
+
+    if (cursor_ == prev_cursor)
+      return;
+
+    if (selection_.is_empty()) {
+      selection_.begin = std::min(cursor_, prev_cursor);
+      selection_.end =  std::max(cursor_, prev_cursor);
+      return;
+    }
+
+    if (cursor_ < selection_.begin) {
+      selection_.begin = cursor_;
+    } else if (cursor_ > selection_.end) {
+      selection_.end = cursor_;
+    } else {
+      if (cursor_ > prev_cursor)
+        selection_.begin = cursor_;
+      else
+        selection_.end = cursor_;
+    }
   }
 
   void select_word() {
