@@ -210,6 +210,13 @@ public:
     save_cursor_ideal_x();
   }
 
+  std::wstring get_selection() {
+    if (selection_.is_empty())
+      return std::wstring();
+    merge_active_text();
+    return std::wstring(full_text_->substr(selection_.begin, selection_.lenght()));
+  }
+
   void v_scroll(int v_offset) {
     if (v_offset == 0)
       return;

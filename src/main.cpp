@@ -327,7 +327,21 @@ public:
   }
 
   bool clipboard_copy() {
-    return false;
+    auto str = textview_->get_selection();
+    if (str.empty())
+      return false;
+    plx::ScopedClipboard clipboard(window());
+    if (!clipboard.did_open())
+      return false;
+    ::EmptyClipboard();
+    auto sz_bytes = (str.size() + 1) * sizeof(wchar_t);
+    auto gh = ::GlobalAlloc(GMEM_MOVEABLE, sz_bytes);
+    if (!gh)
+      return false;
+    memcpy(::GlobalLock(gh), str.c_str(), sz_bytes);
+    ::GlobalUnlock(gh);
+    ::SetClipboardData(CF_UNICODETEXT, gh);
+    return true;
   }
 
   bool clipboard_paste() {
