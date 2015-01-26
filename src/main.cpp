@@ -6,19 +6,26 @@
 #include "texto.h"
 #include "file_io.h"
 
-// Ideas
-// 1.  modified text (like VS ide) side column marker
-// 2.  column guides (80 cols, etc)
-// 3.  dropbox folder aware
-// 4.  number of lines
-// 6.  be more permissive with the utf16 conversion
-// 7.  don't scroll past the top or bottom
-// 8.  save to input file
-// 9.  spellchecker
-// 10. find in text
-// 11. text selection
-// 12. impl copy
+// Ideas and Bugs:
+// 1.  modified text (like VS ide) side column marker.
+// 2.  column guides (80 cols, etc).
+// 3.  dropbox folder aware.
+// 4.  number of lines.
+// 6.  be more permissive with the utf16 conversion.
+// 7.  don't scroll past the bottom.
+// 8.  save to input file.
+// 9.  spellchecker.
+// 10. find in text.
 // 13. text stats above text.
+// 14. pg up and pg down.
+// 15. scroll to cursor on action.
+// 16. make selection with keyboard only.
+// 17. home to start of line, home again to begin of paragraph.
+// 18. end to end of line, end again to end of paragraph.
+// 19. help screen or pane.
+// 20. ctrl + left / right moves over words.
+// 21. deleting needs to redo the active_text.
+// 23. keyboard up / down cursor broken.
 
 template <typename T> int sgn(T val) {
   return (T(0) < val) - (val < T(0));
