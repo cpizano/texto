@@ -328,6 +328,11 @@ public:
     }
   }
 
+  const std::wstring& get_full_text() {
+    merge_active_text();
+    return *full_text_.get();
+  }
+
 private:
 
   uint32_t relative_cursor() {

@@ -56,13 +56,13 @@ Settings LoadSettings() {
   return Settings();
 }
 
-class FileOpenDialog {
+class FileDialog {
   plx::ComPtr<IShellItem> item_;
 
-public:
-  FileOpenDialog(HWND owner) {
+protected:
+  void Show(const GUID& clsid, DWORD options, HWND owner) {
     plx::ComPtr<IFileDialog> dialog;
-    auto hr = ::CoCreateInstance(CLSID_FileOpenDialog, NULL, 
+    auto hr = ::CoCreateInstance(clsid, NULL, 
                                  CLSCTX_INPROC_SERVER,
                                  __uuidof(dialog),
                                  reinterpret_cast<void **>(dialog.GetAddressOf()));
@@ -73,14 +73,15 @@ public:
     hr = dialog->GetOptions(&flags);
     if (hr != S_OK)
       throw plx::ComException(__LINE__, hr);
-    dialog->SetOptions(flags | FOS_FORCEFILESYSTEM);
+    dialog->SetOptions(flags | options);
     hr = dialog->Show(owner);
     if (hr != S_OK)
       return;
-    
+
     dialog->GetResult(item_.GetAddressOf());
   }
 
+public:
   bool success() const {
     return item_ ? true : false;
   }
@@ -93,6 +94,20 @@ public:
     plx::FilePath fp(file_path);
     ::CoTaskMemFree(file_path);
     return fp;
+  }
+};
+
+class FileOpenDialog : public FileDialog {
+public:
+  FileOpenDialog(HWND owner) {
+    Show(CLSID_FileOpenDialog, FOS_FORCEFILESYSTEM, owner);
+  }
+};
+
+class FileSaveDialog : public FileDialog {
+public:
+  FileSaveDialog(HWND owner) {
+    Show(CLSID_FileSaveDialog, FOS_FORCEFILESYSTEM, owner);
   }
 };
 
@@ -116,12 +131,12 @@ public:
   PlainTextFileIO(plx::FilePath& path) : path_(path) {
   }
 
-  void save() {
+  void save(const std::wstring text) {
     auto file = plx::File::Create(
         path_, 
         plx::FileParams::ReadWrite_SharedRead(CREATE_ALWAYS),
         plx::FileSecurity());
-    // $$$ use block_to_disk to save here.
+    file_to_disk(file, text);
   }
 
   std::unique_ptr<std::wstring> load() {
@@ -135,8 +150,8 @@ public:
   }
 
 private:
-  void block_to_disk(plx::File& file, const std::wstring& str_block) {
-    auto block = plx::RangeFromString(str_block);
+  void file_to_disk(plx::File& file, const std::wstring& contents) {
+    auto block = plx::RangeFromString(contents);
     auto utf8 = plx::UTF8FromUTF16(block);
     file.write(plx::RangeFromString(utf8));
   }
@@ -574,7 +589,13 @@ public:
 
     }
     if (command_id == IDC_SAVE_PLAINTEXT) {
-      PlainTextFileIO ptfio(plx::FilePath(L"c:\\test\\texto_file_out.txt"));
+      FileSaveDialog dialog(window());
+      if (!dialog.success())
+        return 0L;
+
+      PlainTextFileIO ptfio(dialog.path());
+      ptfio.save(textview_->get_full_text());
+      return 0L;
     }
     if (command_id == IDC_LOAD_PLAINTEXT) {
       FileOpenDialog dialog(window());
