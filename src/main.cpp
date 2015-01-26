@@ -21,7 +21,7 @@ template <typename T> int sgn(T val) {
 }
 
 namespace ui_txt {
-  const wchar_t no_file_title[] = L"TExTO v0.0.1a <no file> [F2: open]\n";
+  const wchar_t no_file_title[] = L"TExTO v0.0.1b <no file> [F2: open]\n";
 }
 
 enum class HardFailures {
