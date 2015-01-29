@@ -425,24 +425,22 @@ private:
       return;
     if (cursor_ > end_)
       return;
-    DWRITE_HIT_TEST_METRICS hit_metrics;
-    float x, y;
-    auto hr = dwrite_layout_->HitTestTextPosition(relative_cursor(), FALSE, &x, &y, &hit_metrics);
-    if (hr != S_OK)
-      throw plx::ComException(__LINE__, hr);
-    auto yf = y + hit_metrics.height;
+
+    float hm_height;
+    auto pt = point_from_txtpos(relative_cursor(), &hm_height);
+    auto yf = pt.y + hm_height;
 
     auto aa_mode = dc->GetAntialiasMode();
     dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
     if (caret_brush) {
       // caret.
       dc->DrawRectangle(
-          D2D1::RectF(x, y, x + 2.0f, yf), caret_brush, 1.0f);
+          D2D1::RectF(pt.x, pt.y, pt.x + 2.0f, yf), caret_brush, 1.0f);
       dc->SetAntialiasMode(aa_mode);
     }
     if (line_brush) {
       // active line.
-      dc->FillRectangle(D2D1::RectF(0, y, box_.width, yf), line_brush);
+      dc->FillRectangle(D2D1::RectF(0, pt.y, box_.width, yf), line_brush);
     }
     dc->SetAntialiasMode(aa_mode);
   }
@@ -454,32 +452,24 @@ private:
     if (selection_.begin < start_)
       return;
 
-    DWRITE_HIT_TEST_METRICS hitm0, hitm1;
-    float x0, x1, y0, y1;
-    auto hr = dwrite_layout_->HitTestTextPosition(
-        selection_.get_relative_begin(start_), FALSE, &x0, &y0, &hitm0);
-    if (hr != S_OK)
-      throw plx::ComException(__LINE__, hr);
-
-    hr = dwrite_layout_->HitTestTextPosition(
-        selection_.get_relative_end(start_), FALSE, &x1, &y1, &hitm1);
-    if (hr != S_OK)
-      throw plx::ComException(__LINE__, hr);
+    float hm0_height, hm1_height;
+    auto p0 = point_from_txtpos(selection_.get_relative_begin(start_), &hm0_height);
+    auto p1 = point_from_txtpos(selection_.get_relative_end(start_), &hm1_height);
 
     auto aa_mode = dc->GetAntialiasMode();
     dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
 
-    auto yf0 = y0 + hitm0.height;
-    auto yf1 = y1 + hitm1.height;
+    auto yf0 = p0.y + hm0_height;
+    auto yf1 = p1.y + hm1_height;
 
-    if (y1 - y0 < 0.01) {
+    if (p1.y - p0.y < 0.01) {
       // single line select.
-      dc->FillRectangle(D2D1::RectF(x0, y0, x1, yf0), sel_brush);
+      dc->FillRectangle(D2D1::RectF(p0.x, p0.y, p1.x, yf0), sel_brush);
     } else {
       // multi-line select.
-      dc->FillRectangle(D2D1::RectF(x0, y0, box_.width, yf0), sel_brush);
-      dc->FillRectangle(D2D1::RectF(0, yf0, box_.width, y1), sel_brush);
-      dc->FillRectangle(D2D1::RectF(0, y1, x1, yf1), sel_brush);
+      dc->FillRectangle(D2D1::RectF(p0.x, p0.y, box_.width, yf0), sel_brush);
+      dc->FillRectangle(D2D1::RectF(0, yf0, box_.width, p1.y), sel_brush);
+      dc->FillRectangle(D2D1::RectF(0, p1.y, p1.x, yf1), sel_brush);
     }
 
     dc->SetAntialiasMode(aa_mode);
@@ -534,17 +524,52 @@ private:
       }
 
       if (brush) {
-        DWRITE_HIT_TEST_METRICS hit_metrics;
-        float x, y;
-        hr = dwrite_layout_->HitTestTextPosition(offset, FALSE, &x, &y, &hit_metrics);
-        if (hr != S_OK)
-          __debugbreak();
-        y += (2.0f * hit_metrics.height) / 3.0f;
-        x += x_offset;
-        dc->DrawRectangle(D2D1::RectF(x, y, x + width, y + height), brush);
+        float hm_height;
+        auto pt = point_from_txtpos(offset, &hm_height);
+        pt.y += (2.0f * hm_height) / 3.0f;
+        pt.x += x_offset;
+        dc->DrawRectangle(D2D1::RectF(pt.x, pt.y, pt.x + width, pt.y + height), brush);
       }
       offset += cm.length;
     }
+  }
+
+  void save_cursor_ideal_x() {
+    auto pt = point_from_txtpos(relative_cursor(), nullptr);
+    cursor_ideal_x_ = pt.x;
+  }
+
+  uint32_t cursor_at_line_offset(int32_t delta) {
+    float height;
+    auto pt = point_from_txtpos(relative_cursor(), &height);
+
+    if (cursor_ideal_x_ > 0.0f)
+      pt.x = cursor_ideal_x_;
+
+    auto text_pos = text_position(pt.x, pt.y + (height * delta));
+    return plx::To<uint32_t>(text_pos + start_);
+  }
+
+  uint32_t text_position(float x, float y) {
+    DWRITE_HIT_TEST_METRICS hit_metrics;
+    BOOL is_trailing;
+    BOOL is_inside;
+    auto hr = dwrite_layout_->HitTestPoint(x, y, &is_trailing, &is_inside, &hit_metrics);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+    return hit_metrics.textPosition;
+  }
+
+  D2D1_POINT_2F point_from_txtpos(uint32_t text_position, float* height) {
+    DWRITE_HIT_TEST_METRICS hit_metrics;
+    float x, y;
+    auto hr = dwrite_layout_->HitTestTextPosition(text_position, FALSE, &x, &y, &hit_metrics);
+    if (hr != S_OK)
+      throw plx::ComException(__LINE__, hr);
+    if (height)
+      *height = hit_metrics.height;
+
+    return D2D1_POINT_2F {x, y};
   }
 
   std::vector<DWRITE_LINE_METRICS> get_line_metrics() {
@@ -559,39 +584,6 @@ private:
       __debugbreak();
 
     return metrics;
-  }
-
-  void save_cursor_ideal_x() {
-    DWRITE_HIT_TEST_METRICS hit_metrics;
-    float x, y;
-    auto hr = dwrite_layout_->HitTestTextPosition(relative_cursor(), FALSE, &x, &y, &hit_metrics);
-    if (hr != S_OK)
-      throw plx::ComException(__LINE__, hr);
-    cursor_ideal_x_ = x;
-  }
-
-  uint32_t cursor_at_line_offset(int32_t delta) {
-    DWRITE_HIT_TEST_METRICS hit_metrics;
-    float x, y;
-    auto hr = dwrite_layout_->HitTestTextPosition(relative_cursor(), FALSE, &x, &y, &hit_metrics);
-    if (hr != S_OK)
-      throw plx::ComException(__LINE__, hr);
-
-    if (cursor_ideal_x_ > 0.0f)
-      x = cursor_ideal_x_;
-
-    auto text_pos = text_position(x, y + (hit_metrics.height * delta));
-    return plx::To<uint32_t>(text_pos + start_);
-  }
-
-  uint32_t text_position(float x, float y) {
-    DWRITE_HIT_TEST_METRICS hit_metrics;
-    BOOL is_trailing;
-    BOOL is_inside;
-    auto hr = dwrite_layout_->HitTestPoint(x, y, &is_trailing, &is_inside, &hit_metrics);
-    if (hr != S_OK)
-      throw plx::ComException(__LINE__, hr);
-    return hit_metrics.textPosition;
   }
 
 };
