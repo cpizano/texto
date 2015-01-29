@@ -227,7 +227,7 @@ public:
 
       text_brushes_.set_solid(dc(), TextView::brush_text, 0xD68739, 1.0f);
       text_brushes_.set_solid(dc(), TextView::brush_caret, 0xBD4B5B, 1.0f);
-      text_brushes_.set_solid(dc(), TextView::brush_line, 0xD68739, 0.1f);
+      text_brushes_.set_solid(dc(), TextView::brush_line, 0x242424, 0.4f);
       text_brushes_.set_solid(dc(), TextView::brush_control, 0xBD4B5B, 1.0f);
       text_brushes_.set_solid(dc(), TextView::brush_lf, 0x1E5D81, 1.0f);
       text_brushes_.set_solid(dc(), TextView::brush_space, 0x1E5D81, 1.0f);
