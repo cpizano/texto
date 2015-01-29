@@ -31,7 +31,7 @@ template <typename T> int sgn(T val) {
 }
 
 namespace ui_txt {
-  const wchar_t no_file_title[] = L"TExTO v0.0.1b <no file> [F2: open]\n";
+  const wchar_t no_file_title[] = L"TExTO v0.0.1c <no file> [F2: open]\n";
 }
 
 // force plex to generate these two symbols since file_io.h is not fed to
