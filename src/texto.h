@@ -580,7 +580,7 @@ private:
     if (cursor_ideal_x_ > 0.0f)
       x = cursor_ideal_x_;
 
-    auto text_pos = text_position(x, hit_metrics.height * delta);
+    auto text_pos = text_position(x, y + (hit_metrics.height * delta));
     return plx::To<uint32_t>(text_pos + start_);
   }
 

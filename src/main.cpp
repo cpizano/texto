@@ -25,7 +25,6 @@
 // 19. help screen or pane.
 // 20. ctrl + left / right moves over words.
 // 21. deleting needs to redo the active_text.
-// 23. keyboard up / down cursor broken.
 
 template <typename T> int sgn(T val) {
   return (T(0) < val) - (val < T(0));
