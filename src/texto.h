@@ -394,6 +394,22 @@ private:
     active_text_.reset();
   }
 
+  void save_cursor_ideal_x() {
+    auto pt = point_from_txtpos(relative_cursor(), nullptr);
+    cursor_ideal_x_ = pt.x;
+  }
+
+  uint32_t cursor_at_line_offset(int32_t delta) {
+    float height;
+    auto pt = point_from_txtpos(relative_cursor(), &height);
+
+    if (cursor_ideal_x_ > 0.0f)
+      pt.x = cursor_ideal_x_;
+
+    auto text_pos = text_position(pt.x, pt.y + (height * delta));
+    return plx::To<uint32_t>(text_pos + start_);
+  }
+
   void invalidate() {
     dwrite_layout_.Reset();
   }
@@ -532,22 +548,6 @@ private:
       }
       offset += cm.length;
     }
-  }
-
-  void save_cursor_ideal_x() {
-    auto pt = point_from_txtpos(relative_cursor(), nullptr);
-    cursor_ideal_x_ = pt.x;
-  }
-
-  uint32_t cursor_at_line_offset(int32_t delta) {
-    float height;
-    auto pt = point_from_txtpos(relative_cursor(), &height);
-
-    if (cursor_ideal_x_ > 0.0f)
-      pt.x = cursor_ideal_x_;
-
-    auto text_pos = text_position(pt.x, pt.y + (height * delta));
-    return plx::To<uint32_t>(text_pos + start_);
   }
 
   uint32_t text_position(float x, float y) {
