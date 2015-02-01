@@ -34,24 +34,64 @@ struct Selection {
   }
 };
 
+class Starts {
+  // this is a sorted vector.
+  std::vector<size_t> starts_;
+
+public:
+  void push(size_t pos) {
+    if (!starts_.empty()) {
+      // enforce sorting.
+      if (pos <= starts_.back())
+        __debugbreak();
+    }
+    starts_.push_back(pos);
+  }
+
+  size_t pop() {
+    if (starts_.empty())
+      return 0;
+    auto t = starts_.back();
+    starts_.pop_back();
+    return t;
+  }
+
+  size_t pop(size_t n) {
+    if (!n)
+      __debugbreak();
+    size_t t;
+    for (size_t ix = 0; ix != n; ++ix) {
+      t = pop();
+    }
+    return t;
+  }
+
+  void remove(size_t pos) {
+    auto it = std::lower_bound(begin(starts_), end(starts_), pos);
+    starts_.erase(it, end(starts_));
+  }
+};
+
 class TextView {
   // the |box_| are the layout dimensions.
   D2D1_SIZE_F box_;
   // approximate number of characters that fill |box_| given 8pt monospace font.
   size_t block_size_;
-  // |cursor_| is absolute.
+  // the caret,|cursor_| is absolute.
   size_t cursor_;
+  // contains the absolute position of the line where the cursor is.
+  size_t cursor_line_;
   // when scrolling the previous cursor X coordinate.
   float cursor_ideal_x_;
   // the character that starts the next line. Layout always starts here.
   size_t start_;
-  // the end is either the smaller of string size or 8KB.
+  // (one past) the end is either the smaller of string size or 8KB.
   size_t end_;
   // the start and end positions from |full_text_| where |active_text_| was copied from.
   size_t active_start_;
   size_t active_end_;
   // stores previous values of |start_| when we scroll down. It allows to cheaply scroll up.
-  std::vector<size_t> starts_;
+  Starts starts_;
   // the texr range for the interactive selection for copy & paste.
   Selection selection_;
   // stores the text as it should be on disk. If edits are in play it might be incomplete.
@@ -75,7 +115,7 @@ public:
            std::wstring* text) 
       : box_(D2D1::SizeF()),
         block_size_(0),
-        cursor_(0), cursor_ideal_x_(-1.0f),
+        cursor_(0), cursor_line_(0), cursor_ideal_x_(-1.0f),
         start_(0), end_(0),
         active_start_(0), active_end_(0),
         dwrite_factory_(dwrite_factory),
@@ -99,31 +139,34 @@ public:
   void move_cursor_left() {
     if (cursor_ == 0)
       return;
+    view_to_cursor();
     if (!selection_.is_empty()) {
       cursor_ = selection_.begin;
       selection_.clear();
     } else {
       --cursor_;
     }
-    save_cursor_ideal_x();
+    save_cursor_info();
   }
 
   void move_cursor_right() {
     if (cursor_ == end_)
       return;
+    view_to_cursor();
     if (!selection_.is_empty()) {
       cursor_ = selection_.end;
       selection_.clear();
     } else {
       ++cursor_;
     }
-    save_cursor_ideal_x();
+    save_cursor_info();
   }
 
   void move_cursor_down() {
     selection_.clear();
     if (cursor_ == end_)
       return;
+    view_to_cursor();
     cursor_ = cursor_at_line_offset(1);
   }
 
@@ -131,12 +174,32 @@ public:
     selection_.clear();
     if (cursor_ == 0)
       return;
-    cursor_ = cursor_at_line_offset(-1);
+    view_to_cursor();
+    auto next_cursor = cursor_at_line_offset(-1);
+    if (next_cursor == cursor_) {
+      // we didn't scroll, we must be at the top so
+      // we need to scroll one unit up.
+      v_scroll(-1);
+      update_layout();
+      next_cursor = cursor_at_line_offset(-1);
+      if (next_cursor == cursor_)
+        cursor_ = 0;
+    }
+    cursor_ = next_cursor;
+  }
+
+  void view_to_cursor() {
+    if ((cursor_line_ < start_) || (cursor_line_ > end_)) {
+      starts_.remove(cursor_line_);
+      change_view(cursor_line_);
+      update_layout();
+    }
   }
 
   void move_cursor_to(float x, float y) {
     selection_.clear();
     cursor_ = text_position(x, y) + start_;
+    save_cursor_info();
   }
 
   void change_selection(float x, float y) {
@@ -207,7 +270,7 @@ public:
     }
 
     cursor_ = selection_.end;
-    save_cursor_ideal_x();
+    save_cursor_info();
   }
 
   std::wstring get_selection() {
@@ -218,21 +281,15 @@ public:
   }
 
   void v_scroll(int v_offset) {
-    if (v_offset == 0)
-      return;
     // scroll is fairly different going fwd than going backward. Going fwd requires
     // calling GetLineMetrics() and finding the character where the n-th line begins
-    // while scrolling backwards requires looking at the |starts_| vector.
+    // while scrolling backwards requires removing the last element from a vector.
+    if (v_offset == 0)
+      return;
+    save_cursor_info();
     if (v_offset < 0) {
       v_offset = -v_offset;
-      if (v_offset > starts_.size())
-        return;
-      size_t start = 0;
-      for (; v_offset; --v_offset) {
-        start = starts_.back();
-        starts_.pop_back();
-      }
-      change_view(start);
+      change_view(starts_.pop(v_offset));
     } else {
       size_t pos = 0;
       for (auto& ln : line_metrics_) {
@@ -240,7 +297,7 @@ public:
         if (--v_offset == 0)
           break;
       }
-      starts_.push_back(start_);
+      starts_.push(start_);
       change_view(start_ + pos);
     }
     invalidate();
@@ -309,6 +366,7 @@ public:
   void draw(ID2D1DeviceContext* dc,
             plx::D2D1BrushManager& brush,
             DrawOptions options) {
+
     // layout on demand.
     if (!dwrite_layout_) {
       update_layout();
@@ -394,9 +452,15 @@ private:
     active_text_.reset();
   }
 
-  void save_cursor_ideal_x() {
+  void save_cursor_info() {
+    if (cursor_ < start_)
+      return;
+    if (cursor_ > end_)
+      return;
+
     auto pt = point_from_txtpos(relative_cursor(), nullptr);
     cursor_ideal_x_ = pt.x;
+    cursor_line_ = text_position(0, pt.y) + start_;
   }
 
   uint32_t cursor_at_line_offset(int32_t delta) {
