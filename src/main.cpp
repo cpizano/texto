@@ -367,7 +367,6 @@ public:
       return 0L;
     }
 
-    ensure_cursor_in_view();
     update_screen();
     return 0L;
   }
@@ -544,10 +543,6 @@ public:
     // add a character in the current block.
     textview_->insert_char(ch);
     update_screen();
-  }
-
-  void ensure_cursor_in_view() {
-
   }
 
   bool move_cursor(POINTS pts, bool is_selection) {
