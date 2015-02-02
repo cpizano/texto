@@ -87,6 +87,8 @@ class TextView {
   size_t start_;
   // (one past) the end is either the smaller of string size or 8KB.
   size_t end_;
+  // (one past) the end of the visible text.
+  size_t end_view_;
   // the start and end positions from |full_text_| where |active_text_| was copied from.
   size_t active_start_;
   size_t active_end_;
@@ -116,7 +118,7 @@ public:
       : box_(D2D1::SizeF()),
         block_size_(0),
         cursor_(0), cursor_line_(0), cursor_ideal_x_(-1.0f),
-        start_(0), end_(0),
+        start_(0), end_(0), end_view_(0),
         active_start_(0), active_end_(0),
         dwrite_factory_(dwrite_factory),
         dwrite_fmt_(dwrite_fmt) {
@@ -133,7 +135,6 @@ public:
     block_size_ = (width * height) / 85;
     box_ = D2D1::SizeF(static_cast<float>(width), static_cast<float>(height));
     change_view(start_);
-    invalidate();
   }
 
   void move_cursor_left() {
@@ -145,6 +146,9 @@ public:
       selection_.clear();
     } else {
       --cursor_;
+    }
+    if (cursor_ < start_) {
+      v_scroll(-1);
     }
     save_cursor_info();
   }
@@ -159,6 +163,9 @@ public:
     } else {
       ++cursor_;
     }
+    if (cursor_ > end_view_) {
+      v_scroll(1);
+    }
     save_cursor_info();
   }
 
@@ -168,6 +175,8 @@ public:
       return;
     view_to_cursor();
     cursor_ = cursor_at_line_offset(1);
+    if (cursor_ > end_view_)
+      v_scroll(1);
   }
 
   void move_cursor_up() {
@@ -180,7 +189,6 @@ public:
       // we didn't scroll, we must be at the top so
       // we need to scroll one unit up.
       v_scroll(-1);
-      update_layout();
       next_cursor = cursor_at_line_offset(-1);
       if (next_cursor == cursor_)
         cursor_ = 0;
@@ -189,10 +197,9 @@ public:
   }
 
   void view_to_cursor() {
-    if ((cursor_line_ < start_) || (cursor_line_ > end_)) {
+    if ((cursor_line_ < start_) || (cursor_line_ > end_view_)) {
       starts_.remove(cursor_line_);
       change_view(cursor_line_);
-      update_layout();
     }
   }
 
@@ -300,7 +307,6 @@ public:
       starts_.push(start_);
       change_view(start_ + pos);
     }
-    invalidate();
   }
 
   void insert_char(wchar_t c) {
@@ -411,6 +417,10 @@ private:
       return active_text_->at(offset - start_);
   }
 
+  size_t last_position_in_view() {
+    return text_position(box_.width, box_.height) + start_ + 1;
+  }
+
   // we change view when we scroll. |from| is always a line start.
   void change_view(size_t from) {
     // we always merge the modified text back before scrolling. This can be
@@ -422,6 +432,7 @@ private:
 
     start_ = from;
     end_ = from + std::min(block_size_, full_text_->size() - from);
+    invalidate();
   }
 
   // the user has made a text modification, we store and layout now from the
@@ -455,7 +466,7 @@ private:
   void save_cursor_info() {
     if (cursor_ < start_)
       return;
-    if (cursor_ > end_)
+    if (cursor_ > end_view_)
       return;
 
     auto pt = point_from_txtpos(relative_cursor(), nullptr);
@@ -490,6 +501,7 @@ private:
     }
     dwrite_layout_ = plx::CreateDWTextLayout(dwrite_factory_, dwrite_fmt_, txt, box_);
     line_metrics_ = get_line_metrics();
+    end_view_ = last_position_in_view();
   }
 
   void draw_cursor_line(ID2D1DeviceContext* dc, ID2D1Brush* line_brush) {
@@ -503,7 +515,7 @@ private:
   void draw_helper(ID2D1DeviceContext* dc, ID2D1Brush* caret_brush, ID2D1Brush* line_brush) {
     if (cursor_ < start_)
       return;
-    if (cursor_ > end_)
+    if (cursor_ > end_view_)
       return;
 
     float hm_height;
@@ -615,6 +627,9 @@ private:
   }
 
   uint32_t text_position(float x, float y) {
+    if (!dwrite_layout_)
+      update_layout();
+
     DWRITE_HIT_TEST_METRICS hit_metrics;
     BOOL is_trailing;
     BOOL is_inside;
@@ -625,6 +640,9 @@ private:
   }
 
   D2D1_POINT_2F point_from_txtpos(uint32_t text_position, float* height) {
+    if (!dwrite_layout_)
+      update_layout();
+
     DWRITE_HIT_TEST_METRICS hit_metrics;
     float x, y;
     auto hr = dwrite_layout_->HitTestTextPosition(text_position, FALSE, &x, &y, &hit_metrics);
