@@ -42,8 +42,10 @@ public:
   void push(size_t pos) {
     if (!starts_.empty()) {
       // enforce sorting.
-      if (pos <= starts_.back())
+      if (pos < starts_.back())
         __debugbreak();
+      else if (pos == starts_.back())
+        return;
     }
     starts_.push_back(pos);
   }
