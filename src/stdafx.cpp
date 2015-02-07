@@ -418,12 +418,12 @@ plx::JsonValue JsonFromFile(plx::File& cfile) {
                               reinterpret_cast<char*>(r.end()));
   return plx::ParseJsonValue(json);
 }
-std::wstring UTF16FromUTF8(const plx::Range<const uint8_t>& utf8) {
+std::wstring UTF16FromUTF8(const plx::Range<const uint8_t>& utf8, bool strict) {
   if (utf8.empty())
       return std::wstring();
   // Get length and validate string.
   const int utf16_len = ::MultiByteToWideChar(
-      CP_UTF8, MB_ERR_INVALID_CHARS,
+      CP_UTF8,  strict ? MB_ERR_INVALID_CHARS : 0,
       reinterpret_cast<const char*>(utf8.start()),
       plx::To<int>(utf8.size()),
       NULL,
