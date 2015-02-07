@@ -107,8 +107,9 @@ class DCoWindow : public plx::Window <DCoWindow> {
   D2D1_POINT_2F widget_radius_;
 
   float scroll_v_;
-  //float scale_;
   D2D1::Matrix3x2F scale_;
+
+  std::wstring last_title_;
 
   plx::ComPtr<ID3D11Device> d3d_device_;
   plx::ComPtr<ID2D1Factory2> d2d_factory_;
@@ -155,6 +156,7 @@ public:
         scale_(D2D1::Matrix3x2F::Scale(1.0f, 1.0f)),
         brushes_(brush_last),
         text_brushes_(TextView::brush_last) {
+
     // $$ read from config.
     margin_tl_ = D2D1::Point2F(22.0f, 36.0f);
     margin_br_ = D2D1::Point2F(16.0f, 16.0f);
@@ -235,16 +237,18 @@ public:
     }
 
     make_textview(nullptr);
-    update_title();
     update_screen();
   }
 
-  void update_title(const std::wstring& title) {
+  void update_title(std::wstring& title) {
+    if (title == last_title_)
+      return;
     plx::Range<const wchar_t> r(&title[0], title.size());
     auto width = width_ - (widget_pos_.x + widget_radius_.x + 6.0f + margin_tl_.x);
     auto height = text_fmt_[fmt_title_right]->GetFontSize() * 1.2f;
     title_layout_ = plx::CreateDWTextLayout(dwrite_factory_,
         text_fmt_[fmt_title_right], r, D2D1::SizeF(width, height));
+    last_title_.swap(title);
   }
 
   void update_title() {
@@ -458,7 +462,6 @@ public:
       scale_ = D2D1::Matrix3x2F::Scale(
           scalar_scale, scalar_scale, D2D1::Point2F(margin_tl_.x, 0));
       set_textview_size();
-      update_title();
 
     } else {
       // scroll.
@@ -521,7 +524,6 @@ public:
       make_textview(ptfio.load().release());
       
       file_path_ = std::make_unique<plx::FilePath>(dialog.path());
-      update_title();
     }
 
     update_screen();
@@ -570,6 +572,7 @@ public:
   }
 
   void update_screen() {
+    update_title();
     {
       D2D1::ColorF bk_color(0x000000, flag_options_[opacity_50_percent] ? 0.5f : 0.9f);
       plx::ScopedD2D1DeviceContext dc(root_surface_, zero_offset, dpi(), &bk_color);
