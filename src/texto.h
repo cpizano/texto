@@ -73,8 +73,12 @@ public:
 };
 
 class TextView {
-  // the |box_| are the layout dimensions.
+  const float scroll_width = 22.0f;
+
+  // the |box_| are the outer layout dimensions.
   D2D1_SIZE_F box_;
+  // the scroll area.
+  D2D1_POINT_2F scroll_box_;
   // approximate number of characters that fill |box_| given 8pt monospace font.
   size_t block_size_;
   // the caret,|cursor_| is absolute.
@@ -133,7 +137,8 @@ public:
     // every 85 square pixels you need a character. Think of it as an educated guess, like
     // a single character is 8.5 x 10 pixels in the worst case.
     block_size_ = (width * height) / 85;
-    box_ = D2D1::SizeF(static_cast<float>(width), static_cast<float>(height));
+    box_ = D2D1::SizeF(width - scroll_width, static_cast<float>(height));
+    scroll_box_ = D2D1::Point2F(box_.width, 0.0f);
     change_view(start_);
   }
 
@@ -382,6 +387,7 @@ public:
     draw_selection(dc, brush.solid(brush_selection));
     dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), brush.solid(brush_text));
     draw_caret(dc, brush.solid(brush_caret));
+    draw_scroll(dc, brush.solid(brush_caret));
 
     // debugging aids.
     if (options == show_marks) {
@@ -528,12 +534,24 @@ private:
       // caret.
       dc->DrawRectangle(
           D2D1::RectF(pt.x, pt.y, pt.x + 2.0f, yf), caret_brush, 1.0f);
-      dc->SetAntialiasMode(aa_mode);
     }
     if (line_brush) {
       // active line.
       dc->FillRectangle(D2D1::RectF(0, pt.y, box_.width, yf), line_brush);
     }
+    dc->SetAntialiasMode(aa_mode);
+  }
+
+  void draw_scroll(ID2D1DeviceContext* dc, ID2D1Brush* brush) {
+    auto pt = point_from_txtpos(plx::To<uint32_t>(end_), nullptr);
+    if (pt.y < box_.height)  // $$ does not work for last page.
+      return;
+
+    auto aa_mode = dc->GetAntialiasMode();
+    dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+    dc->DrawRectangle(
+        D2D1::RectF(scroll_box_.x + 4.0f, scroll_box_.y,
+                    scroll_box_.x + scroll_width, box_.height), brush, 1.0f);
     dc->SetAntialiasMode(aa_mode);
   }
 

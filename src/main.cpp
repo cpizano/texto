@@ -529,7 +529,7 @@ public:
   }
 
   void set_textview_size() {
-    auto w = (width_ - (22 + 16));
+    auto w = (width_ - (22 + 6));
     auto h = (height_ - (36 + 16)) / scale_._11;
     textview_->set_size(w, static_cast<uint32_t>(h));
   }
