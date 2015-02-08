@@ -74,6 +74,20 @@ public:
   }
 };
 
+std::vector<DWRITE_LINE_METRICS> GetDWLineMetrics(IDWriteTextLayout* layout) {
+  uint32_t line_count = 0;
+  auto hr = layout->GetLineMetrics(nullptr, 0, &line_count);
+  if (hr != E_NOT_SUFFICIENT_BUFFER)
+    throw plx::ComException(__LINE__, hr);
+
+  std::vector<DWRITE_LINE_METRICS> metrics(line_count);
+  hr = layout->GetLineMetrics(&metrics.front(), line_count, &line_count);
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+
+  return metrics;
+}
+
 class TextView {
   const float scroll_width = 22.0f;
   const float gripper_height = 9.0f;
@@ -107,8 +121,6 @@ class TextView {
   std::unique_ptr<std::wstring> full_text_;
   // keeps the active text modifications, it is sort of a "delta" from |full_text_|.
   std::unique_ptr<std::wstring> active_text_;
-  // used to compute the next line when we scroll down.
-  std::vector<DWRITE_LINE_METRICS> line_metrics_;
   // the 3 directwrite objects are necessary for layout and rendering.
   plx::ComPtr<IDWriteTextLayout> dwrite_layout_;
   plx::ComPtr<IDWriteFactory> dwrite_factory_;
@@ -214,9 +226,15 @@ public:
   }
 
   void move_cursor_to(float x, float y) {
-    selection_.clear();
-    cursor_ = text_position(x, y) + start_;
-    save_cursor_info();
+    if (x > box_.width) {
+      //scrollbox hit.
+      scrollbox_move(y / box_.height);
+    } else {
+      // moving cursor.
+      selection_.clear();
+      cursor_ = text_position(x, y) + start_;
+      save_cursor_info();
+    }
   }
 
   void change_selection(float x, float y) {
@@ -309,7 +327,8 @@ public:
       change_view(starts_.pop(v_offset));
     } else {
       size_t pos = 0;
-      for (auto& ln : line_metrics_) {
+      auto metrics = GetDWLineMetrics(dwrite_layout_.Get());
+      for (auto& ln : metrics) {
         pos += ln.length;
         if (--v_offset == 0)
           break;
@@ -511,7 +530,6 @@ private:
       txt = plx::Range<const wchar_t>(active_text_->c_str(), active_text_->size());
     }
     dwrite_layout_ = plx::CreateDWTextLayout(dwrite_factory_, dwrite_fmt_, txt, box_);
-    line_metrics_ = get_line_metrics();
     end_view_ = last_position_in_view();
   }
 
@@ -699,18 +717,36 @@ private:
     return D2D1_POINT_2F {x, y};
   }
 
-  std::vector<DWRITE_LINE_METRICS> get_line_metrics() {
-    uint32_t line_count = 0;
-    auto hr = dwrite_layout_->GetLineMetrics(nullptr, 0, &line_count);
-    if (hr != E_NOT_SUFFICIENT_BUFFER)
-      __debugbreak();
+  void scrollbox_move(float y_fraction) {
+    merge_active_text();
+    size_t target = static_cast<size_t>(full_text_->size() * y_fraction);
 
-    std::vector<DWRITE_LINE_METRICS> metrics(line_count);
-    hr = dwrite_layout_->GetLineMetrics(&metrics.front(), line_count, &line_count);
-    if (hr != S_OK)
-      __debugbreak();
+    size_t start = 0;
+    const size_t error = full_text_->size() / 20;
 
-    return metrics;
+    for (size_t ix = target; ix != 0; --ix) {
+      if ((*full_text_)[ix] == L'\n') {
+        if (target - ix < error) {
+          start = ix + 1;
+          change_view(start);
+          return;
+        }
+        break;
+      }
+    }
+
+    // very slow method.
+    auto txt = plx::Range<const wchar_t>(&(*full_text_)[start],
+                                         &(*full_text_)[full_text_->size()]);
+    auto layout = plx::CreateDWTextLayout(dwrite_factory_, dwrite_fmt_, txt, box_);
+    auto metrics = GetDWLineMetrics(layout.Get());
+
+    size_t sum = 0;
+    for (const auto& line : metrics) {
+      if (sum + line.length > target)
+        break;
+      sum += line.length;
+    }
+    change_view(sum);
   }
-
 };
