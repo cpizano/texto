@@ -252,7 +252,9 @@ public:
   }
 
   void update_title() {
-    std::wstring title(L"scale: " + std::to_wstring(scale_._11).substr(0, 4) + L"  ");
+    std::wstring title(
+        L"pos: " + std::to_wstring(textview_->cursor()) + L" "
+        L"scale: " + std::to_wstring(scale_._11).substr(0, 4) +  L"  ");
     if (!file_path_) {
       title += ui_txt::no_file_title;
     } else {

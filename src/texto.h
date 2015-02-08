@@ -144,6 +144,8 @@ public:
     change_view(start_);
   }
 
+  size_t cursor() const { return cursor_; }
+
   void move_cursor_left() {
     if (cursor_ == 0)
       return;
