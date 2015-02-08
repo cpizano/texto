@@ -408,25 +408,29 @@ public:
 
   LRESULT left_mouse_button_handler(bool down, POINTS pts) {
     BOOL hit = 0;
-    if (down) {
-      // check hit for move window widget.
-      circle_geom_move_->FillContainsPoint(
-          D2D1::Point2F(pts.x, pts.y), D2D1::Matrix3x2F::Identity(), &hit);
-      if (hit != 0) {
-        ::SendMessageW(window(), WM_SYSCOMMAND, SC_MOVE|0x0002, 0);
-      } else {
-        // probably on the text. Move cursor there.
-        if (move_cursor(pts, false))
-          update_screen();
-      }
-      
-    } else {
-      circle_geom_close_->FillContainsPoint(
-          D2D1::Point2F(pts.x, pts.y), D2D1::Matrix3x2F::Identity(), &hit);
-      if (hit != 0) {
+    // check the close button.
+    circle_geom_close_->FillContainsPoint(
+    D2D1::Point2F(pts.x, pts.y), D2D1::Matrix3x2F::Identity(), &hit);
+    if (hit != 0) {
+      if (!down)
         ::PostQuitMessage(0);
-      }
+      return 0L;
     }
+
+    if (!down)
+      return 0L;
+
+    // Not in the close. check hit for move window widget.
+    circle_geom_move_->FillContainsPoint(
+        D2D1::Point2F(pts.x, pts.y), D2D1::Matrix3x2F::Identity(), &hit);
+    if (hit != 0) {
+      ::SendMessageW(window(), WM_SYSCOMMAND, SC_MOVE|0x0002, 0);
+    } else {
+      // probably on the text. Move cursor there.
+      if (move_cursor(pts, false))
+        update_screen();
+    }
+    
     return 0L;
   }
 
