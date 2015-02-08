@@ -76,6 +76,7 @@ public:
 
 class TextView {
   const float scroll_width = 22.0f;
+  const float gripper_height = 9.0f;
 
   // the |box_| are the outer layout dimensions.
   D2D1_SIZE_F box_;
@@ -391,7 +392,7 @@ public:
     draw_selection(dc, brush.solid(brush_selection));
     dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), brush.solid(brush_text));
     draw_caret(dc, brush.solid(brush_caret));
-    draw_scroll(dc, brush.solid(brush_caret));
+    draw_scroll(dc, brush.solid(brush_caret), brush.solid(brush_space));
 
     // debugging aids.
     if (options == show_marks) {
@@ -546,16 +547,38 @@ private:
     dc->SetAntialiasMode(aa_mode);
   }
 
-  void draw_scroll(ID2D1DeviceContext* dc, ID2D1Brush* brush) {
+  void draw_scroll(ID2D1DeviceContext* dc,
+                   ID2D1Brush* brush_gripper, ID2D1Brush* brush_cursor) {
     auto pt = point_from_txtpos(plx::To<uint32_t>(end_), nullptr);
     if (pt.y < box_.height)  // $$ does not work for last page.
       return;
 
+    if (full_text_->empty())
+      __debugbreak();
+
     auto aa_mode = dc->GetAntialiasMode();
     dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+
+    auto inset_x = scroll_box_.x + 4.0f;
     dc->DrawRectangle(
-        D2D1::RectF(scroll_box_.x + 4.0f, scroll_box_.y,
-                    scroll_box_.x + scroll_width, box_.height), brush, 1.0f);
+        D2D1::RectF(inset_x, scroll_box_.y,
+                    scroll_box_.x + scroll_width, box_.height),
+        brush_gripper, 1.0f);
+
+    auto pos_start = box_.height * float(start_) / float(full_text_->size());
+
+    dc->FillRectangle(
+        D2D1::RectF(inset_x, pos_start,
+                    scroll_box_.x + scroll_width, pos_start + gripper_height),
+        brush_gripper);
+
+    auto pos_curs = box_.height * float(cursor_) / float(full_text_->size());
+
+    dc->FillRectangle(
+        D2D1::RectF(inset_x, pos_curs,
+                    scroll_box_.x + scroll_width - 1.0f, pos_curs + 2.0f),
+        brush_cursor);
+
     dc->SetAntialiasMode(aa_mode);
   }
 
