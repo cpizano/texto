@@ -34,46 +34,6 @@ struct Selection {
   }
 };
 
-class Starts {
-  // this is a sorted vector.
-  std::vector<size_t> starts_;
-
-public:
-  void push(size_t pos) {
-    if (!starts_.empty()) {
-      // enforce sorting.
-      if (pos < starts_.back())
-        __debugbreak();
-      else if (pos == starts_.back())
-        return;
-    }
-    starts_.push_back(pos);
-  }
-
-  size_t pop() {
-    if (starts_.empty())
-      return 0;
-    auto t = starts_.back();
-    starts_.pop_back();
-    return t;
-  }
-
-  size_t pop(size_t n) {
-    if (!n)
-      __debugbreak();
-    size_t t;
-    for (size_t ix = 0; ix != n; ++ix) {
-      t = pop();
-    }
-    return t;
-  }
-
-  void remove(size_t pos) {
-    auto it = std::lower_bound(begin(starts_), end(starts_), pos);
-    starts_.erase(it, end(starts_));
-  }
-};
-
 std::vector<DWRITE_LINE_METRICS> GetDWLineMetrics(IDWriteTextLayout* layout) {
   uint32_t line_count = 0;
   auto hr = layout->GetLineMetrics(nullptr, 0, &line_count);
@@ -113,8 +73,6 @@ class TextView {
   // the start and end positions from |full_text_| where |active_text_| was copied from.
   size_t active_start_;
   size_t active_end_;
-  // stores previous values of |start_| when we scroll down. It allows to cheaply scroll up.
-  Starts starts_;
   // the texr range for the interactive selection for copy & paste.
   Selection selection_;
   // stores the text as it should be on disk. If edits are in play it might be incomplete.
@@ -220,7 +178,6 @@ public:
 
   void view_to_cursor() {
     if ((cursor_line_ < start_) || (cursor_line_ > end_view_)) {
-      starts_.remove(cursor_line_);
       change_view(cursor_line_);
     }
   }
@@ -323,8 +280,10 @@ public:
       return;
     save_cursor_info();
     if (v_offset < 0) {
+      if (!start_)
+        return;
       v_offset = -v_offset;
-      change_view(starts_.pop(v_offset));
+      change_view(find_start_above(start_ -1));
     } else {
       size_t pos = 0;
       auto metrics = GetDWLineMetrics(dwrite_layout_.Get());
@@ -333,7 +292,6 @@ public:
         if (--v_offset == 0)
           break;
       }
-      starts_.push(start_);
       change_view(start_ + pos);
     }
   }
@@ -449,6 +407,35 @@ private:
 
   size_t last_position_in_view() {
     return text_position(box_.width, box_.height) + start_ + 1;
+  }
+
+  size_t find_previous_nl_start(size_t target) {
+    if (!target)
+      return 0;
+
+    for (size_t ix = target - 1; ix != 0; --ix) {
+      if ((*full_text_)[ix] == L'\n')
+        return ix + 1;
+    }
+    return 0;
+  }
+
+  size_t find_start_above(size_t target) {
+    merge_active_text();
+    auto prev = find_previous_nl_start(target);
+    
+    auto txt = plx::Range<const wchar_t>(&(*full_text_)[prev],
+                                         &(*full_text_)[target + 1]);
+    auto layout = plx::CreateDWTextLayout(dwrite_factory_, dwrite_fmt_, txt, box_);
+    auto metrics = GetDWLineMetrics(layout.Get());
+
+    size_t sum = prev;
+    for (const auto& line : metrics) {
+      if (sum + line.length > target)
+        break;
+      sum += line.length;
+    }
+    return sum;
   }
 
   // we change view when we scroll. |from| is always a line start.
@@ -720,33 +707,6 @@ private:
   void scrollbox_move(float y_fraction) {
     merge_active_text();
     size_t target = static_cast<size_t>(full_text_->size() * y_fraction);
-
-    size_t start = 0;
-    const size_t error = full_text_->size() / 20;
-
-    for (size_t ix = target; ix != 0; --ix) {
-      if ((*full_text_)[ix] == L'\n') {
-        if (target - ix < error) {
-          start = ix + 1;
-          change_view(start);
-          return;
-        }
-        break;
-      }
-    }
-
-    // very slow method.
-    auto txt = plx::Range<const wchar_t>(&(*full_text_)[start],
-                                         &(*full_text_)[full_text_->size()]);
-    auto layout = plx::CreateDWTextLayout(dwrite_factory_, dwrite_fmt_, txt, box_);
-    auto metrics = GetDWLineMetrics(layout.Get());
-
-    size_t sum = 0;
-    for (const auto& line : metrics) {
-      if (sum + line.length > target)
-        break;
-      sum += line.length;
-    }
-    change_view(sum);
+    change_view(find_start_above(target));
   }
 };

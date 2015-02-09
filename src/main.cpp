@@ -472,10 +472,6 @@ public:
     } else {
       // scroll.
       // $$ read the divisor from the config file.
-      if ((offset > 0) && (scroll_v_ < -100.0f))
-        return 0L;
-      scroll_v_ -= offset / 4;
-
       auto lines = scale_._11 < 0.7 ? 5 : 2;
       textview_->v_scroll(sgn(-offset) * lines);
     }
