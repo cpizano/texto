@@ -143,19 +143,16 @@ public:
     } else {
       ++cursor_;
     }
-    if (cursor_ > end_view_) {
-      v_scroll(1);
-    }
     save_cursor_info();
   }
 
   void move_cursor_down() {
     selection_.clear();
-    if (cursor_ == end_)
+    if (cursor_ == end_)  // $$$ wrong.
       return;
     view_to_cursor();
     cursor_ = cursor_at_line_offset(1);
-    if (cursor_ > end_view_)
+    if (cursor_ >= end_view_)
       v_scroll(1);
   }
 
