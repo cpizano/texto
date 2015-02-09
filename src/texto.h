@@ -273,15 +273,13 @@ public:
   }
 
   void v_scroll(int v_offset) {
-    // scroll is fairly different going fwd than going backward. Going fwd requires
-    // calling GetLineMetrics() and finding the character where the n-th line begins
-    // while scrolling backwards requires removing the last element from a vector.
     if (v_offset == 0)
       return;
     save_cursor_info();
     if (v_offset < 0) {
       if (!start_)
         return;
+      // $$$ we are not honoring the offset here.
       v_offset = -v_offset;
       change_view(find_start_above(start_ -1));
     } else {
@@ -294,6 +292,12 @@ public:
       }
       change_view(start_ + pos);
     }
+  }
+
+  void scrollbox_move(float y_fraction) {
+    merge_active_text();
+    size_t target = static_cast<size_t>(full_text_->size() * y_fraction);
+    change_view(find_start_above(target));
   }
 
   void insert_char(wchar_t c) {
@@ -418,24 +422,6 @@ private:
         return ix + 1;
     }
     return 0;
-  }
-
-  size_t find_start_above(size_t target) {
-    merge_active_text();
-    auto prev = find_previous_nl_start(target);
-    
-    auto txt = plx::Range<const wchar_t>(&(*full_text_)[prev],
-                                         &(*full_text_)[target + 1]);
-    auto layout = plx::CreateDWTextLayout(dwrite_factory_, dwrite_fmt_, txt, box_);
-    auto metrics = GetDWLineMetrics(layout.Get());
-
-    size_t sum = prev;
-    for (const auto& line : metrics) {
-      if (sum + line.length > target)
-        break;
-      sum += line.length;
-    }
-    return sum;
   }
 
   // we change view when we scroll. |from| is always a line start.
@@ -704,9 +690,22 @@ private:
     return D2D1_POINT_2F {x, y};
   }
 
-  void scrollbox_move(float y_fraction) {
+  size_t find_start_above(size_t target) {
     merge_active_text();
-    size_t target = static_cast<size_t>(full_text_->size() * y_fraction);
-    change_view(find_start_above(target));
+    auto prev = find_previous_nl_start(target);
+    
+    auto txt = plx::Range<const wchar_t>(&(*full_text_)[prev],
+                                         &(*full_text_)[target + 1]);
+    auto layout = plx::CreateDWTextLayout(dwrite_factory_, dwrite_fmt_, txt, box_);
+    auto metrics = GetDWLineMetrics(layout.Get());
+
+    size_t sum = prev;
+    for (const auto& line : metrics) {
+      if (sum + line.length > target)
+        break;
+      sum += line.length;
+    }
+    return sum;
   }
+
 };
