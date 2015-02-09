@@ -50,7 +50,6 @@ std::vector<DWRITE_LINE_METRICS> GetDWLineMetrics(IDWriteTextLayout* layout) {
 
 class TextView {
   const float scroll_width = 22.0f;
-  const float gripper_height = 9.0f;
 
   // the |box_| are the outer layout dimensions.
   D2D1_SIZE_F box_;
@@ -537,7 +536,7 @@ private:
   void draw_scroll(ID2D1DeviceContext* dc,
                    ID2D1Brush* brush_gripper, ID2D1Brush* brush_cursor) {
     auto pt = point_from_txtpos(plx::To<uint32_t>(end_), nullptr);
-    if (pt.y < box_.height)  // $$ does not work for last page.
+    if ((pt.y < box_.height) && (start_ < 10))
       return;
 
     if (full_text_->empty())
@@ -547,6 +546,8 @@ private:
     dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
 
     auto inset_x = scroll_box_.x + 4.0f;
+
+    // the scroll box.
     dc->DrawRectangle(
         D2D1::RectF(inset_x, scroll_box_.y,
                     scroll_box_.x + scroll_width, box_.height),
@@ -554,6 +555,10 @@ private:
 
     auto pos_start = box_.height * float(start_) / float(full_text_->size());
 
+    auto gripper_height = std::max(
+        4.0f,
+        ((end_view_ - start_) * box_.height) / full_text_->size());
+    // view box.
     dc->FillRectangle(
         D2D1::RectF(inset_x, pos_start,
                     scroll_box_.x + scroll_width, pos_start + gripper_height),
@@ -561,6 +566,7 @@ private:
 
     auto pos_curs = box_.height * float(cursor_) / float(full_text_->size());
 
+    // cursor mark.
     dc->FillRectangle(
         D2D1::RectF(inset_x, pos_curs,
                     scroll_box_.x + scroll_width - 1.0f, pos_curs + 2.0f),
