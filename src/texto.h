@@ -134,8 +134,9 @@ public:
   }
 
   void move_cursor_right() {
-    if (cursor_ == end_)
+    if (!cursor_in_text())
       return;
+
     view_to_cursor();
     if (!selection_.is_empty()) {
       cursor_ = selection_.end;
@@ -148,12 +149,10 @@ public:
 
   void move_cursor_down() {
     selection_.clear();
-    if (cursor_ == end_)  // $$$ wrong.
-      return;
     view_to_cursor();
     cursor_ = cursor_at_line_offset(1);
     if (cursor_ >= end_view_)
-      v_scroll(1);
+      v_scroll(2);
   }
 
   void move_cursor_up() {
