@@ -115,6 +115,7 @@ public:
   }
 
   size_t cursor() const { return cursor_; }
+  size_t start() const { return start_; }
 
   void move_cursor_left() {
     if (cursor_ == 0)
