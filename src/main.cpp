@@ -11,14 +11,12 @@
 // 2.  column guides (80 cols, etc).
 // 3.  dropbox folder aware.
 // 4.  number of lines.
-// 6.  be more permissive with the utf16 conversion.
 // 7.  don't scroll past the bottom.
 // 8.  save to input file.
 // 9.  spellchecker.
 // 10. find in text.
 // 13. text stats above text.
 // 14. pg up and pg down.
-// 15. scroll to cursor on action.
 // 16. make selection with keyboard only.
 // 17. home to start of line, home again to begin of paragraph.
 // 18. end to end of line, end again to end of paragraph.
