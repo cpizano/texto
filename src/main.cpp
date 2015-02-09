@@ -81,6 +81,16 @@ plx::ComPtr<ID2D1Geometry> CreateD2D1Geometry(
   return geometry;
 }
 
+plx::ComPtr<ID2D1Geometry> CreateD2D1Geometry(
+    plx::ComPtr<ID2D1Factory2> d2d1_factory,
+    const D2D1_ROUNDED_RECT& rect) {
+  plx::ComPtr<ID2D1RoundedRectangleGeometry> geometry;
+  auto hr = d2d1_factory->CreateRoundedRectangleGeometry(rect, geometry.GetAddressOf());
+  if (hr != S_OK)
+    throw plx::ComException(__LINE__, hr);
+  return geometry;
+}
+
 enum FlagOptions {
   debug_text_boxes,
   opacity_50_percent,
@@ -119,8 +129,8 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<IDWriteFactory> dwrite_factory_;
 
   // widgets.
-  plx::ComPtr<ID2D1Geometry> circle_geom_move_;
-  plx::ComPtr<ID2D1Geometry> circle_geom_close_;
+  plx::ComPtr<ID2D1Geometry> geom_move_;
+  plx::ComPtr<ID2D1Geometry> geom_close_;
 
   enum TxtFromat {
     fmt_mono_text,
@@ -136,6 +146,7 @@ class DCoWindow : public plx::Window <DCoWindow> {
     brush_blue,
     brush_frame,
     brush_sel,
+    brush_drag,
     brush_last
   };
 
@@ -197,13 +208,14 @@ public:
       throw plx::ComException(__LINE__, hr);
 
     // create widget's geometry.
-    circle_geom_close_ = CreateD2D1Geometry(d2d_factory_,
+    geom_close_ = CreateD2D1Geometry(d2d_factory_,
         D2D1::Ellipse(D2D1::Point2F(width_ - widget_pos_.x , widget_pos_.y),
                       widget_radius_.x, widget_radius_.y));
     widget_pos_.x += (widget_radius_.x * 2.0f ) + 8.0f;
-    circle_geom_move_ = CreateD2D1Geometry(d2d_factory_,
-        D2D1::Ellipse(D2D1::Point2F(width_ - widget_pos_.x , widget_pos_.y),
-                      widget_radius_.x, widget_radius_.y));
+
+    geom_move_ = CreateD2D1Geometry(d2d_factory_,
+        D2D1::RoundedRect(D2D1::RectF(margin_tl_.x, 0, width_ - widget_pos_.x, 16),
+                          3.0f, 3.0f));
 
     dwrite_factory_ = plx::CreateDWriteFactory();
     // create fonts.
@@ -224,6 +236,7 @@ public:
       brushes_.set_solid(dc(), brush_red, 0xBD4B5B, 1.0f);
       brushes_.set_solid(dc(), brush_blue, 0x1E5D81, 1.0f);
       brushes_.set_solid(dc(), brush_frame, 0x00AE4A, 1.0f);
+      brushes_.set_solid(dc(), brush_drag, 0x1E5D81, 0.4f);
 
       text_brushes_.set_solid(dc(), TextView::brush_text, 0xD68739, 1.0f);
       text_brushes_.set_solid(dc(), TextView::brush_caret, 0xBD4B5B, 1.0f);
@@ -407,8 +420,8 @@ public:
   LRESULT left_mouse_button_handler(bool down, POINTS pts) {
     BOOL hit = 0;
     // check the close button.
-    circle_geom_close_->FillContainsPoint(
-    D2D1::Point2F(pts.x, pts.y), D2D1::Matrix3x2F::Identity(), &hit);
+    geom_close_->FillContainsPoint(
+        D2D1::Point2F(pts.x, pts.y), D2D1::Matrix3x2F::Identity(), &hit);
     if (hit != 0) {
       if (!down)
         ::PostQuitMessage(0);
@@ -419,7 +432,7 @@ public:
       return 0L;
 
     // Not in the close. check hit for move window widget.
-    circle_geom_move_->FillContainsPoint(
+    geom_move_->FillContainsPoint(
         D2D1::Point2F(pts.x, pts.y), D2D1::Matrix3x2F::Identity(), &hit);
     if (hit != 0) {
       ::SendMessageW(window(), WM_SYSCOMMAND, SC_MOVE|0x0002, 0);
@@ -560,8 +573,8 @@ public:
 
   void draw_frame(ID2D1DeviceContext* dc) {
     // draw widgets.
-    dc->DrawGeometry(circle_geom_move_.Get(), brushes_.solid(brush_blue), 4.0f);
-    dc->DrawGeometry(circle_geom_close_.Get(), brushes_.solid(brush_red), 4.0f);
+    dc->FillGeometry(geom_move_.Get(), brushes_.solid(brush_drag));
+    dc->DrawGeometry(geom_close_.Get(), brushes_.solid(brush_red), 4.0f);
     // draw title.
     dc->DrawTextLayout(D2D1::Point2F(margin_tl_.x, widget_pos_.y - widget_radius_.y),
                        title_layout_.Get(), brushes_.solid(brush_frame));
