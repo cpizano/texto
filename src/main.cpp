@@ -245,6 +245,7 @@ public:
       text_brushes_.set_solid(dc(), TextView::brush_lf, 0x1E5D81, 1.0f);
       text_brushes_.set_solid(dc(), TextView::brush_space, 0x1E5D81, 1.0f);
       text_brushes_.set_solid(dc(), TextView::brush_selection, 0x006400, 0.8f);
+      text_brushes_.set_solid(dc(), TextView::brush_find, 0x9A2ED2, 0.7f);
     }
 
     make_textview(nullptr);

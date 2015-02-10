@@ -34,6 +34,42 @@ struct Selection {
   }
 };
 
+struct Ranges {
+  using Tup = std::tuple<size_t, size_t>;
+  std::vector<Tup> items;
+
+  bool empty() const { return items.empty(); }
+
+  void add(size_t start, size_t end) {
+    items.emplace_back(start, end);
+  }
+
+  void clear() { items.clear(); }
+
+  std::vector<DWRITE_TEXT_RANGE> get(size_t offset, size_t start, size_t end) const {
+    auto lb = std::lower_bound(
+        items.begin(), items.end(), start,
+        [](const Tup& tup, size_t s) {
+            return (std::get<0>(tup) < s) && (std::get<1>(tup) < s);
+        });
+    auto ub = std::upper_bound(
+        lb, items.end(), end,
+        [](size_t e, const Tup& tup) {
+            return (e <= std::get<0>(tup));
+        });
+
+    std::vector<DWRITE_TEXT_RANGE> res;
+    for (auto it = lb; it != ub; ++it) {
+      DWRITE_TEXT_RANGE tr = {
+          plx::To<uint32_t>(std::get<0>(*it) - offset),
+          plx::To<uint32_t>(std::get<1>(*it) - offset)};
+      res.push_back(tr);
+    }
+
+    return res;
+  }
+};
+
 std::vector<DWRITE_LINE_METRICS> GetDWLineMetrics(IDWriteTextLayout* layout) {
   uint32_t line_count = 0;
   auto hr = layout->GetLineMetrics(nullptr, 0, &line_count);
@@ -74,6 +110,8 @@ class TextView {
   size_t active_end_;
   // the texr range for the interactive selection for copy & paste.
   Selection selection_;
+  // The currently found text ranges.
+  Ranges find_ranges_;
   // stores the text as it should be on disk. If edits are in play it might be incomplete.
   std::unique_ptr<std::wstring> full_text_;
   // keeps the active text modifications, it is sort of a "delta" from |full_text_|.
@@ -259,6 +297,11 @@ public:
 
     cursor_ = selection_.end;
     save_cursor_info();
+
+    // find all the same words.
+    if (selection_.lenght() < 3)
+      return;
+    mark_find(get_selection());
   }
 
   std::wstring get_selection() {
@@ -266,6 +309,19 @@ public:
       return std::wstring();
     merge_active_text();
     return std::wstring(full_text_->substr(selection_.begin, selection_.lenght()));
+  }
+
+  void mark_find(const std::wstring& text) {
+    find_ranges_.clear();
+    merge_active_text();
+    size_t pos = 0;
+    while (true) {
+      auto x = full_text_->find(text, pos);
+      if (x == std::wstring::npos)
+        break;
+      find_ranges_.add(x, x + text.size());
+      pos = x + 1;
+    }
   }
 
   void v_scroll(int v_offset) {
@@ -351,6 +407,7 @@ public:
     brush_lf,
     brush_space,
     brush_selection,
+    brush_find,
     brush_last
   };
 
@@ -367,9 +424,12 @@ public:
 
     draw_cursor_line(dc, brush.solid(brush_line));
     draw_selection(dc, brush.solid(brush_selection));
-    dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), brush.solid(brush_text));
+    draw_text(dc, brush.solid(brush_text));
     draw_caret(dc, brush.solid(brush_caret));
-    draw_scroll(dc, brush.solid(brush_caret), brush.solid(brush_space));
+    draw_scroll(dc,
+                brush.solid(brush_caret),
+                brush.solid(brush_space),
+                brush.solid(brush_find));
 
     // debugging aids.
     if (options == show_marks) {
@@ -502,6 +562,10 @@ private:
     end_view_ = last_position_in_view();
   }
 
+  void draw_text(ID2D1DeviceContext* dc, ID2D1Brush* text_brush) {
+    dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), text_brush);
+  }
+
   void draw_cursor_line(ID2D1DeviceContext* dc, ID2D1Brush* line_brush) {
     draw_helper(dc, nullptr, line_brush);
   }
@@ -535,7 +599,9 @@ private:
   }
 
   void draw_scroll(ID2D1DeviceContext* dc,
-                   ID2D1Brush* brush_gripper, ID2D1Brush* brush_cursor) {
+                   ID2D1Brush* brush_gripper,
+                   ID2D1Brush* brush_cursor,
+                   ID2D1Brush* brush_find) {
     auto pt = point_from_txtpos(plx::To<uint32_t>(end_), nullptr);
     if ((pt.y < box_.height) && (start_ < 10))
       return;
@@ -567,9 +633,19 @@ private:
 
     auto pos_curs = box_.height * float(cursor_) / float(full_text_->size());
 
+    // found items.
+    if (!find_ranges_.empty()) {
+      for (auto item : find_ranges_.items) {
+        auto fp = box_.height * float(std::get<0>(item)) / float(full_text_->size());
+        dc->FillRectangle(
+            D2D1::RectF(inset_x, fp, scroll_box_.x + scroll_width - 1.0f, fp + 1.0f),
+            brush_find);
+      }
+    }
+
     // cursor mark.
     dc->FillRectangle(
-        D2D1::RectF(inset_x, pos_curs,
+        D2D1::RectF(scroll_box_.x -1, pos_curs,
                     scroll_box_.x + scroll_width - 1.0f, pos_curs + 2.0f),
         brush_cursor);
 
