@@ -489,6 +489,8 @@ private:
   // the user has made a text modification, we store and layout now from the
   // |active_text_| until we scroll.
   void make_active_text() {
+    find_ranges_.clear();
+
     if (active_text_)
       return;
     // remember the range we copied, which we need to use when we merge.
