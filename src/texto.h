@@ -46,7 +46,7 @@ struct Ranges {
 
   void clear() { items.clear(); }
 
-  std::vector<DWRITE_TEXT_RANGE> get(size_t offset, size_t start, size_t end) const {
+  std::vector<Tup> get(size_t start, size_t end) const {
     auto lb = std::lower_bound(
         items.begin(), items.end(), start,
         [](const Tup& tup, size_t s) {
@@ -58,15 +58,7 @@ struct Ranges {
             return (e <= std::get<0>(tup));
         });
 
-    std::vector<DWRITE_TEXT_RANGE> res;
-    for (auto it = lb; it != ub; ++it) {
-      DWRITE_TEXT_RANGE tr = {
-          plx::To<uint32_t>(std::get<0>(*it) - offset),
-          plx::To<uint32_t>(std::get<1>(*it) - offset)};
-      res.push_back(tr);
-    }
-
-    return res;
+    return std::vector<Tup>(lb, ub);
   }
 };
 
@@ -424,7 +416,7 @@ public:
 
     draw_cursor_line(dc, brush.solid(brush_line));
     draw_selection(dc, brush.solid(brush_selection));
-    draw_text(dc, brush.solid(brush_text));
+    draw_text(dc, brush.solid(brush_text), brush.solid(brush_caret));
     draw_caret(dc, brush.solid(brush_caret));
     draw_scroll(dc,
                 brush.solid(brush_caret),
@@ -562,8 +554,39 @@ private:
     end_view_ = last_position_in_view();
   }
 
-  void draw_text(ID2D1DeviceContext* dc, ID2D1Brush* text_brush) {
+  void draw_text(ID2D1DeviceContext* dc, ID2D1Brush* text_brush, ID2D1Brush* find_brush) {
     dc->DrawTextLayout(D2D1::Point2F(), dwrite_layout_.Get(), text_brush);
+
+    // draw boxes on the text from the find set.
+    auto found = find_ranges_.get(start_, end_view_);
+    if (found.empty())
+      return;
+
+    auto aa_mode = dc->GetAntialiasMode();
+    dc->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+
+    for (auto& item : found) {
+      float hm0_height, hm1_height;
+      auto p0 = point_from_txtpos(
+          plx::To<uint32_t>(std::get<0>(item) - start_), &hm0_height);
+      auto p1 = point_from_txtpos(
+          plx::To<uint32_t>(std::get<1>(item) - start_), &hm1_height);
+
+      auto yf0 = p0.y + hm0_height;
+      auto yf1 = p1.y + hm1_height;
+
+      if (p1.y - p0.y < 0.01) {
+        // single line select.
+        dc->DrawRectangle(D2D1::RectF(p0.x, p0.y, p1.x, yf0), find_brush);
+      } else {
+        // multi-line select.
+        dc->DrawRectangle(D2D1::RectF(p0.x, p0.y, box_.width, yf0), find_brush);
+        dc->DrawRectangle(D2D1::RectF(0, yf0, box_.width, p1.y), find_brush);
+        dc->DrawRectangle(D2D1::RectF(0, p1.y, p1.x, yf1), find_brush);
+      }
+    }
+
+    dc->SetAntialiasMode(aa_mode);
   }
 
   void draw_cursor_line(ID2D1DeviceContext* dc, ID2D1Brush* line_brush) {
