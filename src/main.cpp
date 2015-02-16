@@ -5,6 +5,7 @@
 #include "resource.h"
 #include "texto.h"
 #include "file_io.h"
+#include "find_ctrl.h"
 
 // Ideas and Bugs:
 // 1.  modified text (like VS ide) side column marker.
@@ -128,9 +129,6 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<IDCompositionVisual2> root_visual_;
   plx::ComPtr<IDCompositionSurface> root_surface_;
 
-  plx::ComPtr<IDCompositionVisual2> hover_visual_;
-  plx::ComPtr<IDCompositionSurface> hover_surface_;
-
   plx::ComPtr<IDWriteFactory> dwrite_factory_;
 
   // widgets.
@@ -155,19 +153,13 @@ class DCoWindow : public plx::Window <DCoWindow> {
     brush_last
   };
 
-  enum BrushesHover {
-    brush_hv_text,
-    brush_hv_last
-  };
-
   plx::D2D1BrushManager brushes_;
   plx::D2D1BrushManager text_brushes_;
-  plx::D2D1BrushManager hover_brushes_;
-
   plx::ComPtr<IDWriteTextLayout> title_layout_;
   std::unique_ptr<plx::FilePath> file_path_;
-
   std::unique_ptr<TextView> textview_;
+
+  std::unique_ptr<FindControl> find_ctrl_;
 
 public:
   DCoWindow(int width, int height)
@@ -175,8 +167,7 @@ public:
         scroll_v_(0.0f),
         scale_(D2D1::Matrix3x2F::Scale(1.0f, 1.0f)),
         brushes_(brush_last),
-        text_brushes_(TextView::brush_last),
-        hover_brushes_(brush_hv_last) {
+        text_brushes_(TextView::brush_last) {
 
     // $$ read from config.
     margin_tl_ = D2D1::Point2F(22.0f, 36.0f);
@@ -286,29 +277,6 @@ public:
       title += file_path_->raw();
     }
     update_title(title);
-  }
-
-  void create_hover(int width, int height) {
-    hover_surface_ = plx::CreateDCoSurface(
-        dco_device_,
-        static_cast<unsigned int>(dpi().to_physical_x(width)),
-        static_cast<unsigned int>(dpi().to_physical_x(height)));
-
-    hover_visual_ = plx::CreateDCoVisual(dco_device_);
-    hover_visual_->SetContent(hover_surface_.Get());
-    root_visual_->AddVisual(hover_visual_.Get(), TRUE, nullptr);
-
-    {
-      plx::ScopedD2D1DeviceContext dc(hover_surface_, zero_offset, dpi(), nullptr);
-      hover_brushes_.set_solid(dc(), brush_hv_text, 0xD68739, 1.0f);
-    }
-  }
-
-  void close_hover() {
-    hover_brushes_.release_all();
-    hover_surface_.Reset();
-    root_visual_->RemoveVisual(hover_visual_.Get());
-    hover_visual_.Reset();
   }
 
   bool clipboard_copy() {
@@ -612,14 +580,12 @@ public:
   }
 
   void find_control() {
-    if (hover_surface_) {
-      close_hover();
+    if (find_ctrl_) {
+      find_ctrl_.reset();
       return;
     } 
-    
-    create_hover(200, 200);
-    hover_visual_->SetOffsetX(static_cast<float>(width_ - 220));
-    hover_visual_->SetOffsetY(margin_tl_.y);
+    find_ctrl_ = std::make_unique<FindControl>(dpi(), dco_device_, root_visual_);
+    find_ctrl_->set_position(static_cast<float>(width_ - 220), margin_tl_.y);
   }
 
   void draw_frame(ID2D1DeviceContext* dc) {
@@ -657,11 +623,8 @@ public:
       textview_->draw(dc(), text_brushes_, mode);
     }
 
-    if (hover_surface_) {
-      D2D1::ColorF bk_color(0x000000, 0.1f);
-      plx::ScopedD2D1DeviceContext dc(hover_surface_, zero_offset, dpi(), &bk_color);
-      dc()->DrawRectangle(
-          D2D1::RectF(0.0f, 0.0f, 50.0f, 50.0f), hover_brushes_.solid(brush_hv_text));
+    if (find_ctrl_) {
+      find_ctrl_->draw();
     }
 
     dco_device_->Commit();

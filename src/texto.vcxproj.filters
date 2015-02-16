@@ -29,6 +29,9 @@
     <ClInclude Include="file_io.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="find_ctrl.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="config.json">
