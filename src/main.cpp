@@ -124,8 +124,13 @@ class DCoWindow : public plx::Window <DCoWindow> {
   plx::ComPtr<ID2D1Device> d2d_device_;
   plx::ComPtr<IDCompositionDesktopDevice> dco_device_;
   plx::ComPtr<IDCompositionTarget> dco_target_;
+
   plx::ComPtr<IDCompositionVisual2> root_visual_;
   plx::ComPtr<IDCompositionSurface> root_surface_;
+
+  plx::ComPtr<IDCompositionVisual2> hover_visual_;
+  plx::ComPtr<IDCompositionSurface> hover_surface_;
+
   plx::ComPtr<IDWriteFactory> dwrite_factory_;
 
   // widgets.
@@ -141,7 +146,7 @@ class DCoWindow : public plx::Window <DCoWindow> {
 
   plx::ComPtr<IDWriteTextFormat> text_fmt_[fmt_last];
 
-  enum Brushes {
+  enum BrushesMain {
     brush_red,
     brush_blue,
     brush_frame,
@@ -150,8 +155,14 @@ class DCoWindow : public plx::Window <DCoWindow> {
     brush_last
   };
 
+  enum BrushesHover {
+    brush_hv_text,
+    brush_hv_last
+  };
+
   plx::D2D1BrushManager brushes_;
   plx::D2D1BrushManager text_brushes_;
+  plx::D2D1BrushManager hover_brushes_;
 
   plx::ComPtr<IDWriteTextLayout> title_layout_;
   std::unique_ptr<plx::FilePath> file_path_;
@@ -164,7 +175,8 @@ public:
         scroll_v_(0.0f),
         scale_(D2D1::Matrix3x2F::Scale(1.0f, 1.0f)),
         brushes_(brush_last),
-        text_brushes_(TextView::brush_last) {
+        text_brushes_(TextView::brush_last),
+        hover_brushes_(brush_hv_last) {
 
     // $$ read from config.
     margin_tl_ = D2D1::Point2F(22.0f, 36.0f);
@@ -274,6 +286,29 @@ public:
       title += file_path_->raw();
     }
     update_title(title);
+  }
+
+  void create_hover(int width, int height) {
+    hover_surface_ = plx::CreateDCoSurface(
+        dco_device_,
+        static_cast<unsigned int>(dpi().to_physical_x(width)),
+        static_cast<unsigned int>(dpi().to_physical_x(height)));
+
+    hover_visual_ = plx::CreateDCoVisual(dco_device_);
+    hover_visual_->SetContent(hover_surface_.Get());
+    root_visual_->AddVisual(hover_visual_.Get(), TRUE, nullptr);
+
+    {
+      plx::ScopedD2D1DeviceContext dc(hover_surface_, zero_offset, dpi(), nullptr);
+      hover_brushes_.set_solid(dc(), brush_hv_text, 0xD68739, 1.0f);
+    }
+  }
+
+  void close_hover() {
+    hover_brushes_.release_all();
+    hover_surface_.Reset();
+    root_visual_->RemoveVisual(hover_visual_.Get());
+    hover_visual_.Reset();
   }
 
   bool clipboard_copy() {
@@ -540,6 +575,9 @@ public:
       
       file_path_ = std::make_unique<plx::FilePath>(dialog.path());
     }
+    if (command_id == IDC_FIND) {
+      find_control();
+    }
 
     update_screen();
     return 0L;
@@ -573,6 +611,17 @@ public:
     return true;
   }
 
+  void find_control() {
+    if (hover_surface_) {
+      close_hover();
+      return;
+    } 
+    
+    create_hover(200, 200);
+    hover_visual_->SetOffsetX(static_cast<float>(width_ - 220));
+    hover_visual_->SetOffsetY(margin_tl_.y);
+  }
+
   void draw_frame(ID2D1DeviceContext* dc) {
     // draw widgets.
     dc->FillGeometry(geom_move_.Get(), brushes_.solid(brush_drag));
@@ -588,7 +637,8 @@ public:
 
   void update_screen() {
     update_title();
-    {
+
+    if (root_surface_) {
       D2D1::ColorF bk_color(0x000000, flag_options_[opacity_50_percent] ? 0.5f : 0.9f);
       plx::ScopedD2D1DeviceContext dc(root_surface_, zero_offset, dpi(), &bk_color);
       draw_frame(dc());
@@ -605,8 +655,15 @@ public:
  
       auto mode = flag_options_[debug_text_boxes] ? TextView::show_marks : TextView::normal;
       textview_->draw(dc(), text_brushes_, mode);
-
     }
+
+    if (hover_surface_) {
+      D2D1::ColorF bk_color(0x000000, 0.1f);
+      plx::ScopedD2D1DeviceContext dc(hover_surface_, zero_offset, dpi(), &bk_color);
+      dc()->DrawRectangle(
+          D2D1::RectF(0.0f, 0.0f, 50.0f, 50.0f), hover_brushes_.solid(brush_hv_text));
+    }
+
     dco_device_->Commit();
   }
 
@@ -622,7 +679,8 @@ HACCEL LoadAccelerators() {
     {FVIRTKEY, VK_F3, IDC_SAVE_PLAINTEXT},
     {FVIRTKEY, VK_F10, IDC_DBG_TEXT_BOXES},
     {FVIRTKEY, VK_F11, IDC_50P_TRANSPARENT},
-    {FVIRTKEY, VK_F9, IDC_ALT_FONT}
+    {FVIRTKEY, VK_F9, IDC_ALT_FONT},
+    {FVIRTKEY|FCONTROL, 'F', IDC_FIND}
   };
 
   return ::CreateAcceleratorTableW(accelerators, _countof(accelerators));
