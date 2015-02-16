@@ -40,6 +40,7 @@ public:
       brushes_.set_solid(dc(), brush_text, 0xD68739, 1.0f);
     }
 
+    draw();
   }
 
   ~FindControl() {

@@ -623,10 +623,6 @@ public:
       textview_->draw(dc(), text_brushes_, mode);
     }
 
-    if (find_ctrl_) {
-      find_ctrl_->draw();
-    }
-
     dco_device_->Commit();
   }
 
