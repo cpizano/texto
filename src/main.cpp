@@ -584,7 +584,8 @@ public:
       find_ctrl_.reset();
       return;
     } 
-    find_ctrl_ = std::make_unique<FindControl>(dpi(), dco_device_, root_visual_);
+    find_ctrl_ = std::make_unique<FindControl>(
+        dpi(), dco_device_, root_visual_, dwrite_factory_);
     find_ctrl_->set_position(static_cast<float>(width_ - 220), margin_tl_.y);
   }
 
