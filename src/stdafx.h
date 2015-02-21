@@ -22,6 +22,7 @@
 #include <initializer_list>
 #include <cctype>
 #include <iterator>
+#include <list>
 #include <memory>
 #include <map>
 #include <algorithm>
@@ -88,6 +89,19 @@ public:
 // plx::ComPtr : smart COM pointer.
 //
 template <typename T> using ComPtr = Microsoft::WRL::ComPtr <T>;
+
+
+///////////////////////////////////////////////////////////////////////////////
+// Makes Direct2D's ID2D1Geometry objects.
+//
+
+plx::ComPtr<ID2D1Geometry> CreateD2D1Geometry(
+    plx::ComPtr<ID2D1Factory2> d2d1_factory,
+    const D2D1_ELLIPSE& ellipse) ;
+
+plx::ComPtr<ID2D1Geometry> CreateD2D1Geometry(
+    plx::ComPtr<ID2D1Factory2> d2d1_factory,
+    const D2D1_ROUNDED_RECT& rect) ;
 
 
 ///////////////////////////////////////////////////////////////////////////////

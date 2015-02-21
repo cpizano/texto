@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "resource.h"
+#include "focus_manager.h"
 #include "texto.h"
 #include "file_io.h"
 #include "find_ctrl.h"
@@ -37,6 +38,8 @@ namespace ui_txt {
 // the generator yet.
 void* f00 = &plx::UTF8FromUTF16;
 void* f01 = &plx::UTF16FromUTF8;
+std::list<int> f03;
+
 
 enum class HardFailures {
   none,
@@ -71,26 +74,6 @@ Settings LoadSettings() {
 }
 
 const D2D1_SIZE_F zero_offset = {0};
-
-plx::ComPtr<ID2D1Geometry> CreateD2D1Geometry(
-    plx::ComPtr<ID2D1Factory2> d2d1_factory,
-    const D2D1_ELLIPSE& ellipse) {
-  plx::ComPtr<ID2D1EllipseGeometry> geometry;
-  auto hr = d2d1_factory->CreateEllipseGeometry(ellipse, geometry.GetAddressOf());
-  if (hr != S_OK)
-    throw plx::ComException(__LINE__, hr);
-  return geometry;
-}
-
-plx::ComPtr<ID2D1Geometry> CreateD2D1Geometry(
-    plx::ComPtr<ID2D1Factory2> d2d1_factory,
-    const D2D1_ROUNDED_RECT& rect) {
-  plx::ComPtr<ID2D1RoundedRectangleGeometry> geometry;
-  auto hr = d2d1_factory->CreateRoundedRectangleGeometry(rect, geometry.GetAddressOf());
-  if (hr != S_OK)
-    throw plx::ComException(__LINE__, hr);
-  return geometry;
-}
 
 enum FlagOptions {
   debug_text_boxes,
@@ -161,6 +144,8 @@ class DCoWindow : public plx::Window <DCoWindow> {
 
   std::unique_ptr<FindControl> find_ctrl_;
 
+  FocusManager focus_manager_;
+
 public:
   DCoWindow(int width, int height)
       : width_(width), height_(height),
@@ -211,12 +196,12 @@ public:
       throw plx::ComException(__LINE__, hr);
 
     // create widget's geometry.
-    geom_close_ = CreateD2D1Geometry(d2d_factory_,
+    geom_close_ = plx::CreateD2D1Geometry(d2d_factory_,
         D2D1::Ellipse(D2D1::Point2F(width_ - widget_pos_.x , widget_pos_.y),
                       widget_radius_.x, widget_radius_.y));
     widget_pos_.x += (widget_radius_.x * 2.0f ) + 8.0f;
 
-    geom_move_ = CreateD2D1Geometry(d2d_factory_,
+    geom_move_ = plx::CreateD2D1Geometry(d2d_factory_,
         D2D1::RoundedRect(D2D1::RectF(margin_tl_.x, 0, width_ - widget_pos_.x, 16),
                           3.0f, 3.0f));
 
@@ -330,6 +315,14 @@ public:
   }
 
   LRESULT message_handler(const UINT message, WPARAM wparam, LPARAM lparam) {
+    // First chance goes to child controls, if any.
+    bool handled = false;
+    auto fmlr = focus_manager_.message_handler(message, wparam, lparam, &handled);
+    if (handled) {
+      update_screen();
+      return fmlr;
+    }
+
     switch (message) {
       case WM_DESTROY: {
         ::PostQuitMessage(0);
@@ -581,12 +574,15 @@ public:
 
   void find_control() {
     if (find_ctrl_) {
+      focus_manager_.remove_target(find_ctrl_.get());
       find_ctrl_.reset();
       return;
-    } 
+    }
     find_ctrl_ = std::make_unique<FindControl>(
-        dpi(), dco_device_, root_visual_, dwrite_factory_);
+        dpi(), dco_device_, root_visual_, dwrite_factory_, d2d_factory_);
     find_ctrl_->set_position(static_cast<float>(width_ - 220), margin_tl_.y);
+    focus_manager_.add_target(find_ctrl_.get());
+    focus_manager_.take_focus(find_ctrl_.get());
   }
 
   void draw_frame(ID2D1DeviceContext* dc) {
