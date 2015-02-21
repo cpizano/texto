@@ -160,6 +160,7 @@
   <ItemGroup>
     <ClInclude Include="file_io.h" />
     <ClInclude Include="find_ctrl.h" />
+    <ClInclude Include="focus_manager.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="texto.h" />

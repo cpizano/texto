@@ -32,6 +32,9 @@
     <ClInclude Include="find_ctrl.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="focus_manager.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="config.json">
