@@ -76,11 +76,8 @@ public:
     visual_->SetOffsetY(y);
   }
 
-  plx::ComPtr<ID2D1Geometry> MessageTarget::geometry() override {
-    return geometry_;
-  }
-
-  void MessageTarget::got_focus() override {
+  bool MessageTarget::got_focus() override {
+    return true;
   }
 
   void MessageTarget::lost_focus() override {
