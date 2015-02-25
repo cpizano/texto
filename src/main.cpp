@@ -16,9 +16,9 @@
 // 7.  don't scroll past the bottom.
 // 8.  save to input file.
 // 9.  spellchecker.
-// 10. find in text.
 // 13. text stats above text.
 // 14. pg up and pg down.
+// 15. undo / redo.
 // 16. make selection with keyboard only.
 // 17. home to start of line, home again to begin of paragraph.
 // 18. end to end of line, end again to end of paragraph.
@@ -31,7 +31,7 @@ template <typename T> int sgn(T val) {
 }
 
 namespace ui_txt {
-  const wchar_t no_file_title[] = L"TExTO v0.0.2a <no file> [F2: open]\n";
+  const wchar_t no_file_title[] = L"TExTO v0.0.2b <no file> [F2: open]\n";
 }
 
 // force plex to generate these two symbols since file_io.h is not fed to
