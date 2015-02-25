@@ -22,6 +22,7 @@ class FindControl : public MessageTarget {
   plx::ComPtr<ID2D1Geometry> geometry_;
 
   std::wstring search_text_;
+  TextView* text_view_;
 
   enum BrushesHover {
     brush_text,
@@ -46,6 +47,7 @@ public:
         has_focus_(true),
         root_visual_(root_visual),
         dwrite_factory_(dwrite_factory),
+        text_view_(nullptr),
         brushes_(brush_last) {
 
     surface_ = plx::CreateDCoSurface(
@@ -79,6 +81,10 @@ public:
   ~FindControl() {
     brushes_.release_all();
     root_visual_->RemoveVisual(visual_.Get());
+  }
+
+  void set_textview(TextView* tv) {
+    text_view_ = tv;
   }
   
   void set_position(float x, float y) {
@@ -121,6 +127,11 @@ public:
  
       update_layout(search_text_);
       draw();
+      // inform the textview.
+      if (search_text_.size() > 1) {
+        if (text_view_)
+          text_view_->mark_find(search_text_);
+      }
       *handled = true;
     }
     if ((wmsg.message >= WM_MOUSEFIRST) && (wmsg.message <= WM_MOUSELAST)) {

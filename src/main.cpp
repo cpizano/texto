@@ -578,9 +578,11 @@ public:
       find_ctrl_.reset();
       return;
     }
+    // create and show the control.
     find_ctrl_ = std::make_unique<FindControl>(
         dpi(), dco_device_, root_visual_, dwrite_factory_, d2d_factory_);
     find_ctrl_->set_position(static_cast<float>(width_ - 220), margin_tl_.y);
+    find_ctrl_->set_textview(textview_.get());
     focus_manager_.add_target(find_ctrl_.get());
     focus_manager_.take_focus(find_ctrl_.get());
   }
