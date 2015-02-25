@@ -576,6 +576,7 @@ public:
     if (find_ctrl_) {
       focus_manager_.remove_target(find_ctrl_.get());
       find_ctrl_.reset();
+      textview_->clear_find();
       return;
     }
     // create and show the control.

@@ -318,6 +318,10 @@ public:
     }
   }
 
+  void clear_find() {
+    find_ranges_.clear();
+  }
+
   void v_scroll(int v_offset) {
     if (v_offset == 0)
       return;
