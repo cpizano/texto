@@ -4,13 +4,23 @@
 
 // There are 3 ways the focus manager re-directs keyboard focus
 //
+struct WindowMessage {
+  UINT message;
+  WPARAM wparam;
+  LPARAM lparam;
+
+  WindowMessage(UINT msg, WPARAM wp, LPARAM lp)
+      : message(msg), wparam(wp), lparam(lp) {}
+};
+
+class FocusManager;
 
 class MessageTarget {
 public:
   virtual bool got_focus() = 0;
   virtual void lost_focus() = 0;
   virtual LRESULT message_handler(
-      const UINT message, WPARAM wparam, LPARAM lparam, bool* handled) = 0;
+      const WindowMessage& wmsg, FocusManager* fman, bool* handled) = 0;
 };
 
 class FocusManager {
@@ -62,7 +72,8 @@ public:
       *handled = false;
       return 0L;
     }
-    return current_->message_handler(message, wparam, lparam, handled);
+    return current_->message_handler(
+        WindowMessage(message, wparam, lparam), this, handled);
   }
 
 private:

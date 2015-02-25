@@ -6,6 +6,9 @@
 class FindControl : public MessageTarget {
   const plx::DPI& dpi_;
   D2D1_SIZE_F box_;
+  D2D1_SIZE_F origin_;
+  bool has_focus_;
+
   plx::ComPtr<IDCompositionVisual2> visual_;
   plx::ComPtr<IDCompositionVisual2> root_visual_;
   plx::ComPtr<IDCompositionSurface> surface_;
@@ -20,6 +23,7 @@ class FindControl : public MessageTarget {
   enum BrushesHover {
     brush_text,
     brush_background,
+    brush_background_focus,
     brush_last
   };
   plx::D2D1BrushManager brushes_;
@@ -35,6 +39,8 @@ public:
               plx::ComPtr<ID2D1Factory2> d2d1_factory) 
       : dpi_(dpi),
         box_(D2D1::SizeF(160.0f, 20.0f)),
+        origin_(D2D1::SizeF()),
+        has_focus_(true),
         root_visual_(root_visual),
         dwrite_factory_(dwrite_factory),
         brushes_(brush_last) {
@@ -52,6 +58,7 @@ public:
       plx::ScopedD2D1DeviceContext dc(surface_, D2D1::SizeF(), dpi, nullptr);
       brushes_.set_solid(dc(), brush_text, 0xD68739, 1.0f);
       brushes_.set_solid(dc(), brush_background, 0x1E5D81, 0.5f);
+      brushes_.set_solid(dc(), brush_background_focus, 0x1E5D81, 0.9f);
     }
 
     dwrite_fmt_ = plx::CreateDWriteSystemTextFormat(
@@ -74,21 +81,31 @@ public:
   void set_position(float x, float y) {
     visual_->SetOffsetX(x);
     visual_->SetOffsetY(y);
+    origin_ = D2D1::SizeF(x, y);
   }
 
   bool MessageTarget::got_focus() override {
+    if (!has_focus_) {
+      has_focus_ = true;
+      draw();
+    }
     return true;
   }
 
   void MessageTarget::lost_focus() override {
+    if (has_focus_) {
+      has_focus_ = false;
+      draw();
+    }
   }
 
   LRESULT MessageTarget::message_handler(
-      const UINT message, WPARAM wparam, LPARAM lparam, bool* handled) override {
+      const WindowMessage& wmsg, FocusManager* fman, bool* handled) override {
+
     *handled = false;
 
-    if (message == WM_CHAR) {
-      auto c = static_cast<wchar_t>(wparam);
+    if (wmsg.message == WM_CHAR) {
+      auto c = static_cast<wchar_t>(wmsg.wparam);
       if (c >= 0x20) {
         search_text_.append(1, c);
       } else if (c == 0x08) {
@@ -102,6 +119,21 @@ public:
       update_layout(search_text_);
       draw();
       *handled = true;
+    }
+    if ((wmsg.message >= WM_MOUSEFIRST) && (wmsg.message <= WM_MOUSELAST)) {
+      auto pts = MAKEPOINTS(wmsg.lparam);
+      BOOL hit = 0;
+      geometry_->FillContainsPoint(
+          D2D1::Point2F(static_cast<float>(pts.x), static_cast<float>(pts.y)),
+          D2D1::Matrix3x2F::Translation(origin_),
+          &hit);
+      if (hit) {
+        *handled = true;
+      } else {
+        if ((wmsg.message == WM_LBUTTONDOWN) || (wmsg.message == WM_RBUTTONDOWN)) {
+          fman->reset_focus();
+        }
+      }
     }
     return 0L;
   }
@@ -118,7 +150,8 @@ private:
     D2D1::ColorF bk_color(0x0, 0.1f);
     plx::ScopedD2D1DeviceContext dc(surface_, D2D1::SizeF(), dpi_, &bk_color);
 
-    dc()->FillGeometry(geometry_.Get(), brushes_.solid(brush_background));
+    auto brush = brushes_.solid(has_focus_ ? brush_background_focus : brush_background);
+    dc()->FillGeometry(geometry_.Get(), brush);
     dc()->DrawTextLayout(
         D2D1::Point2F(10.0f, 10.0f), dwrite_layout_.Get(), brushes_.solid(brush_text));
   }
