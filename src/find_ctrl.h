@@ -1,8 +1,10 @@
-#pragma once
-#include "stdafx.h"
 // TExTO.  Copyright 2014, Carlos Pizano (carlos.pizano@gmail.com)
 // TExTO is a text editor prototype. This is the find-in-document
 // control.
+
+#pragma once
+#include "stdafx.h"
+#include "texto.h"
 
 class FindControl : public MessageTarget {
   const plx::DPI& dpi_;

@@ -1,6 +1,3 @@
-#pragma once
-#include "stdafx.h"
-
 // TExTO.  Copyright 2014, Carlos Pizano (carlos.pizano@gmail.com)
 // TExTO is a text editor prototype.
 //
@@ -11,6 +8,9 @@
 //
 // TExTO, as a text editor, is still finding out who she is. It should straddle between a better
 // notepad.exe and probably a worse notepad++.
+
+#pragma once
+#include "stdafx.h"
 
 struct Selection {
   size_t begin;
