@@ -1,4 +1,6 @@
+#pragma once
 #include "stdafx.h"
+
 // TExTO.  Copyright 2014, Carlos Pizano (carlos.pizano@gmail.com)
 // TExTO is a text editor prototype.
 //
